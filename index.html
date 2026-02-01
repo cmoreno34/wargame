@@ -169,17 +169,33 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
         return code;
       };
 
+      // Sanitize state from Firebase (empty arrays become null in Firebase)
+      const sanitizeState = (data) => {
+        const defaults = getInitialState();
+        return {
+          ...defaults,
+          ...data,
+          blueDecisions: data.blueDecisions || [],
+          redDecisions: data.redDecisions || [],
+          shocksApplied: data.shocksApplied || [],
+          intelReleased: data.intelReleased || [],
+          messages: data.messages || [],
+          roundResults: data.roundResults || [],
+          marketState: data.marketState || defaults.marketState
+        };
+      };
+
       // Firebase sync
       useEffect(() => {
         if (!database || !roomCode) return;
 
         dbRef.current = database.ref(`wargames/${roomCode}`);
-        
+
         // Listen for changes
         const unsubscribe = dbRef.current.on('value', (snapshot) => {
           const data = snapshot.val();
           if (data) {
-            setGameState(data);
+            setGameState(sanitizeState(data));
             setConnectionStatus('connected');
           }
         });
@@ -197,13 +213,13 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
         if (!roomCode) return;
 
         const key = `wargame_${roomCode}`;
-        
+
         const poll = setInterval(() => {
           const saved = localStorage.getItem(key);
           if (saved) {
             const data = JSON.parse(saved);
             if (data.lastUpdate > gameState.lastUpdate) {
-              setGameState(data);
+              setGameState(sanitizeState(data));
             }
           }
         }, 500);
@@ -301,7 +317,7 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
 
       const submitDecision = (decision) => {
         const key = currentTeam === 'blue' ? 'blueDecisions' : 'redDecisions';
-        const existing = gameState[key].filter(d => d.round !== gameState.currentRound);
+        const existing = (gameState[key] || []).filter(d => d.round !== gameState.currentRound);
         updateState({
           [key]: [...existing, { ...decision, round: gameState.currentRound, timestamp: Date.now() }]
         });
@@ -310,24 +326,24 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
 
       const applyShock = (shock) => {
         updateState({
-          shocksApplied: [...gameState.shocksApplied, { ...shock, round: gameState.currentRound }],
-          messages: [...gameState.messages, { type: 'shock', content: shock.name, detail: shock.description, round: gameState.currentRound }]
+          shocksApplied: [...(gameState.shocksApplied || []), { ...shock, round: gameState.currentRound }],
+          messages: [...(gameState.messages || []), { type: 'shock', content: shock.name, detail: shock.description, round: gameState.currentRound }]
         });
         addNotification(`🌩️ Shock applied!`, 'warning');
       };
 
       const releaseIntel = (intel) => {
         updateState({
-          intelReleased: [...gameState.intelReleased, { ...intel, round: gameState.currentRound }],
-          messages: [...gameState.messages, { type: 'intel', content: intel.name, detail: intel.content, round: gameState.currentRound }]
+          intelReleased: [...(gameState.intelReleased || []), { ...intel, round: gameState.currentRound }],
+          messages: [...(gameState.messages || []), { type: 'intel', content: intel.name, detail: intel.content, round: gameState.currentRound }]
         });
         addNotification(`📊 Intel released!`, 'info');
       };
 
       const advanceRound = () => {
-        const blue = gameState.blueDecisions.find(d => d.round === gameState.currentRound);
-        const red = gameState.redDecisions.find(d => d.round === gameState.currentRound);
-        const shocks = gameState.shocksApplied.filter(s => s.round === gameState.currentRound);
+        const blue = (gameState.blueDecisions || []).find(d => d.round === gameState.currentRound);
+        const red = (gameState.redDecisions || []).find(d => d.round === gameState.currentRound);
+        const shocks = (gameState.shocksApplied || []).filter(s => s.round === gameState.currentRound);
 
         let change = { blue: 0, red: 0 };
         if (blue) change.blue += blue.impact?.marketShare || 0;
@@ -358,7 +374,7 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
             timeRemaining: GAME_CONFIG.roundDurationMinutes * 60,
             isTimerRunning: false,
             marketState: newMarket,
-            roundResults: [...gameState.roundResults, result]
+            roundResults: [...(gameState.roundResults || []), result]
           });
           addNotification(`Round ${gameState.currentRound + 1} starting!`, 'info');
         } else {
@@ -366,7 +382,7 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
             gamePhase: 'debrief',
             isTimerRunning: false,
             marketState: newMarket,
-            roundResults: [...gameState.roundResults, result]
+            roundResults: [...(gameState.roundResults || []), result]
           });
         }
       };
@@ -535,10 +551,12 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
         const team = GAME_CONFIG.teams[currentTeam];
         const round = CASE_STUDY.rounds[gameState.currentRound - 1];
         const options = STRATEGIC_OPTIONS[currentTeam] || [];
-        const myDecision = currentTeam === 'blue' 
-          ? gameState.blueDecisions.find(d => d.round === gameState.currentRound)
-          : currentTeam === 'red' 
-          ? gameState.redDecisions.find(d => d.round === gameState.currentRound)
+        const blueDecisions = gameState.blueDecisions || [];
+        const redDecisions = gameState.redDecisions || [];
+        const myDecision = currentTeam === 'blue'
+          ? blueDecisions.find(d => d.round === gameState.currentRound)
+          : currentTeam === 'red'
+          ? redDecisions.find(d => d.round === gameState.currentRound)
           : null;
 
         return (
@@ -601,9 +619,9 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
                   <div className="bg-slate-800 rounded-xl p-4">
                     <h3 className="text-white font-bold mb-3 text-sm">📡 Intel Feed</h3>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {gameState.messages.length === 0 ? (
+                      {(gameState.messages || []).length === 0 ? (
                         <p className="text-slate-500 text-xs italic">No intel yet...</p>
-                      ) : gameState.messages.slice().reverse().map((m, i) => (
+                      ) : (gameState.messages || []).slice().reverse().map((m, i) => (
                         <div key={i} className={`p-2 rounded-lg text-xs ${m.type === 'shock' ? 'bg-amber-500/20' : 'bg-blue-500/20'}`}>
                           <div className="font-semibold text-white">{m.content}</div>
                           <div className="text-slate-300 mt-1">{m.detail}</div>
@@ -615,13 +633,13 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
                   <div className="bg-slate-800 rounded-xl p-4">
                     <h3 className="text-white font-bold mb-3 text-sm">📋 Decisions</h3>
                     <div className="space-y-2">
-                      <div className={`p-2 rounded-lg text-sm ${gameState.blueDecisions.find(d => d.round === gameState.currentRound) ? 'bg-blue-500/20' : 'bg-slate-700'}`}>
+                      <div className={`p-2 rounded-lg text-sm ${blueDecisions.find(d => d.round === gameState.currentRound) ? 'bg-blue-500/20' : 'bg-slate-700'}`}>
                         <span className="text-slate-400 text-xs">CloudVault:</span>
-                        <span className="text-white ml-2">{gameState.blueDecisions.find(d => d.round === gameState.currentRound)?.name || '⏳'}</span>
+                        <span className="text-white ml-2">{blueDecisions.find(d => d.round === gameState.currentRound)?.name || '⏳'}</span>
                       </div>
-                      <div className={`p-2 rounded-lg text-sm ${gameState.redDecisions.find(d => d.round === gameState.currentRound) ? 'bg-red-500/20' : 'bg-slate-700'}`}>
+                      <div className={`p-2 rounded-lg text-sm ${redDecisions.find(d => d.round === gameState.currentRound) ? 'bg-red-500/20' : 'bg-slate-700'}`}>
                         <span className="text-slate-400 text-xs">DataStorm:</span>
-                        <span className="text-white ml-2">{gameState.redDecisions.find(d => d.round === gameState.currentRound)?.name || '⏳'}</span>
+                        <span className="text-white ml-2">{redDecisions.find(d => d.round === gameState.currentRound)?.name || '⏳'}</span>
                       </div>
                     </div>
                   </div>
@@ -645,7 +663,7 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
                         <div>
                           <h4 className="text-white text-xs font-semibold mb-2">Release Intel</h4>
                           <div className="space-y-1">
-                            {INTEL_REPORTS.filter(i => !gameState.intelReleased.find(r => r.id === i.id)).map(intel => (
+                            {INTEL_REPORTS.filter(i => !(gameState.intelReleased || []).find(r => r.id === i.id)).map(intel => (
                               <button key={intel.id} onClick={() => releaseIntel(intel)} className="w-full text-left p-2 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300">{intel.name}</button>
                             ))}
                           </div>
@@ -727,12 +745,12 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
                 </div>
               </div>
 
-              {gameState.roundResults.length > 0 && (
+              {(gameState.roundResults || []).length > 0 && (
                 <div className="mt-4 bg-slate-900 rounded-lg p-3">
                   <table className="w-full text-sm">
                     <thead><tr className="text-slate-400 border-b border-slate-700"><th className="text-left p-2">Round</th><th className="text-left p-2">CloudVault</th><th className="text-left p-2">DataStorm</th></tr></thead>
                     <tbody>
-                      {gameState.roundResults.map(r => (
+                      {(gameState.roundResults || []).map(r => (
                         <tr key={r.round} className="text-slate-300 border-b border-slate-700/50">
                           <td className="p-2">R{r.round}</td>
                           <td className="p-2">{r.blueDecision}</td>
@@ -809,4 +827,3 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
   </script>
 </body>
 </html>
-
