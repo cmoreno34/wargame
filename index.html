@@ -21,9 +21,40 @@
 </head>
 <body class="bg-slate-900 min-h-screen">
   <div id="root"></div>
-  
+
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useRef, Component } = React;
+
+    // Error Boundary to catch render errors and show them instead of dark screen
+    class ErrorBoundary extends Component {
+      constructor(props) {
+        super(props);
+        this.state = { hasError: false, error: null };
+      }
+      static getDerivedStateFromError(error) {
+        return { hasError: true, error };
+      }
+      componentDidCatch(error, info) {
+        console.error('War Game Error:', error, info);
+      }
+      render() {
+        if (this.state.hasError) {
+          return React.createElement('div', {
+            style: { padding: '40px', color: 'white', background: '#1e293b', minHeight: '100vh', fontFamily: 'monospace' }
+          },
+            React.createElement('h1', { style: { color: '#f87171', fontSize: '24px', marginBottom: '16px' } }, 'Something went wrong'),
+            React.createElement('pre', { style: { color: '#fbbf24', whiteSpace: 'pre-wrap', fontSize: '14px' } },
+              String(this.state.error)
+            ),
+            React.createElement('button', {
+              onClick: () => { this.setState({ hasError: false, error: null }); },
+              style: { marginTop: '20px', padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }
+            }, 'Try Again')
+          );
+        }
+        return this.props.children;
+      }
+    }
 
     // ╔════════════════════════════════════════════════════════════════════════════╗
     // ║  FIREBASE CONFIGURATION - YOU MUST REPLACE THIS WITH YOUR OWN CONFIG!     ║
@@ -54,7 +85,11 @@
       try {
         firebase.initializeApp(FIREBASE_CONFIG);
         database = firebase.database();
-        console.log("✅ Firebase connected!");
+        // Test actual connection
+        database.ref('.info/connected').on('value', (snap) => {
+          console.log(snap.val() ? '✅ Firebase CONNECTED' : '❌ Firebase DISCONNECTED');
+        });
+        console.log("✅ Firebase initialized!");
       } catch (e) {
         console.error("Firebase init error:", e);
       }
@@ -160,6 +195,7 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
       const [inputRoomCode, setInputRoomCode] = useState('');
       const timerRef = useRef(null);
       const dbRef = useRef(null);
+      const lastSaveRef = useRef(0); // Track our own writes to skip echo from Firebase
 
       // Generate random room code
       const generateRoomCode = () => {
@@ -191,11 +227,18 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
 
         dbRef.current = database.ref(`wargames/${roomCode}`);
 
-        // Listen for changes
+        // Listen for changes from Firebase (including from other clients)
         const unsubscribe = dbRef.current.on('value', (snapshot) => {
           const data = snapshot.val();
           if (data) {
-            setGameState(sanitizeState(data));
+            const sanitized = sanitizeState(data);
+            setGameState(prev => {
+              // Only update if the remote data is newer than what we have
+              if (sanitized.lastUpdate >= prev.lastUpdate) {
+                return sanitized;
+              }
+              return prev;
+            });
             setConnectionStatus('connected');
           }
         });
@@ -249,16 +292,20 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
       }, [currentTeam, gameState.isTimerRunning, gameState.gamePhase]);
 
       const saveState = (state) => {
-        const toSave = { ...state, lastUpdate: Date.now() };
-        
+        const now = Date.now();
+        const toSave = { ...state, lastUpdate: now };
+        lastSaveRef.current = now; // Mark this as our own write
+
         if (database && roomCode && dbRef.current) {
-          dbRef.current.set(toSave).catch(err => console.error('Firebase save error:', err));
+          dbRef.current.set(toSave).catch(err => {
+            console.error('Firebase save error:', err);
+            // Fallback to localStorage if Firebase write fails (e.g. rules expired)
+            localStorage.setItem(`wargame_${roomCode}`, JSON.stringify(toSave));
+            addNotification('⚠️ Cloud sync failed, using local', 'warning');
+          });
         } else if (roomCode) {
           localStorage.setItem(`wargame_${roomCode}`, JSON.stringify(toSave));
         }
-        
-        // Also update local state
-        setGameState(toSave);
       };
 
       const updateState = (updates) => {
@@ -823,7 +870,12 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
       );
     };
 
-    ReactDOM.render(<WarGameSimulator />, document.getElementById('root'));
+    ReactDOM.render(
+      <ErrorBoundary>
+        <WarGameSimulator />
+      </ErrorBoundary>,
+      document.getElementById('root')
+    );
   </script>
 </body>
 </html>
