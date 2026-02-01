@@ -233,10 +233,13 @@
 
       const sanitizeState = (data) => {
         const defaults = getInitialState();
+        const roundResults = (data.roundResults || []).map(r => ({
+          ...r, shocks: r.shocks || [], interaction: r.interaction || null
+        }));
         return { ...defaults, ...data,
           blueDecisions: data.blueDecisions || [], redDecisions: data.redDecisions || [],
           shocksApplied: data.shocksApplied || [], intelReleased: data.intelReleased || [],
-          messages: data.messages || [], roundResults: data.roundResults || [],
+          messages: data.messages || [], roundResults,
           marketState: data.marketState || defaults.marketState
         };
       };
@@ -795,8 +798,8 @@
                               </div>
                               <div className="text-xs text-blue-300">CloudVault: {r.blueDecision}</div>
                               <div className="text-xs text-red-300">DataStorm: {r.redDecision}</div>
-                              {r.interaction && <div className="text-xs text-slate-400 mt-1 italic">{r.interaction.analysis.substring(0, 120)}...</div>}
-                              {r.shocks.length > 0 && <div className="text-xs text-amber-300 mt-1">Shocks: {r.shocks.join(', ')}</div>}
+                              {r.interaction && r.interaction.analysis && <div className="text-xs text-slate-400 mt-1 italic">{r.interaction.analysis.substring(0, 120)}...</div>}
+                              {(r.shocks || []).length > 0 && <div className="text-xs text-amber-300 mt-1">Shocks: {(r.shocks || []).join(', ')}</div>}
                             </div>
                           ))}
                         </div>
@@ -889,12 +892,12 @@
                         <div className="text-white text-sm font-semibold">{r.redDecision}</div>
                       </div>
                     </div>
-                    {r.interaction && (
+                    {r.interaction && r.interaction.analysis && (
                       <div className="bg-slate-700 rounded-lg p-3">
                         <div className="text-slate-200 text-xs whitespace-pre-line">{r.interaction.analysis}</div>
                       </div>
                     )}
-                    {r.shocks.length > 0 && <div className="mt-2 text-xs text-amber-300">Shocks this round: {r.shocks.join(', ')}</div>}
+                    {(r.shocks || []).length > 0 && <div className="mt-2 text-xs text-amber-300">Shocks this round: {(r.shocks || []).join(', ')}</div>}
                   </div>
                 ))}
               </div>
