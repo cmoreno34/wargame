@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CI War Gaming Simulator | CloudVault Case Study</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <style>
+    @keyframes slide-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .slide-in { animation: slide-in 0.3s ease-out; }
+    .sync-indicator { width: 10px; height: 10px; border-radius: 50%; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+    .pulse { animation: pulse 1.5s infinite; }
+  </style>
+</head>
+<body class="bg-slate-900 min-h-screen">
+  <div id="root"></div>
+  
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // ╔════════════════════════════════════════════════════════════════════════════╗
+    // ║  FIREBASE CONFIGURATION - YOU MUST REPLACE THIS WITH YOUR OWN CONFIG!     ║
+    // ║                                                                            ║
+    // ║  1. Go to https://console.firebase.google.com/                            ║
+    // ║  2. Create a new project (free)                                           ║
+    // ║  3. Go to "Realtime Database" → Create Database → Start in TEST MODE      ║
+    // ║  4. Go to Project Settings → Your Apps → Web App → Register               ║
+    // ║  5. Copy the firebaseConfig object and paste below                        ║
+    // ╚════════════════════════════════════════════════════════════════════════════╝
+    
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyAn3T4-mUz8hWjvu_U9JYxtWlLSq5jwnek",
+      authDomain: "wargame-classroom.firebaseapp.com",
+      databaseURL: "https://wargame-classroom-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "wargame-classroom",
+      storageBucket: "wargame-classroom.firebasestorage.app",
+      messagingSenderId: "423551977862",
+      appId: "1:423551977862:web:a6b9532c95d595a5378407"
+    };
+
+    // Check if Firebase is configured
+    const isFirebaseConfigured = !FIREBASE_CONFIG.apiKey.includes("YOUR_");
+
+    // Initialize Firebase if configured
+    let database = null;
+    if (isFirebaseConfigured) {
+      try {
+        firebase.initializeApp(FIREBASE_CONFIG);
+        database = firebase.database();
+        console.log("✅ Firebase connected!");
+      } catch (e) {
+        console.error("Firebase init error:", e);
+      }
+    }
+
+    // ==================== GAME CONFIGURATION ====================
+    const GAME_CONFIG = {
+      totalRounds: 4,
+      roundDurationMinutes: 8,
+      teams: {
+        blue: { name: 'CloudVault (Blue)', color: 'blue', icon: '🛡️', role: 'Defender' },
+        red: { name: 'DataStorm (Red)', color: 'red', icon: '⚔️', role: 'Attacker' },
+        control: { name: 'Control Team', color: 'purple', icon: '🎯', role: 'Facilitator' }
+      }
+    };
+
+    // ==================== CASE STUDY DATA ====================
+    const CASE_STUDY = {
+      title: "The CloudVault Crisis",
+      subtitle: "Enterprise Cloud Storage Market - Q1 2026",
+      background: `CloudVault dominates the enterprise cloud storage market with 45% market share and €2.4B annual revenue. Their premium pricing (€50/user/month) reflects superior security features.
+
+DataStorm, an aggressive challenger with 18% market share, has announced "Project Thunder" - a major strategic initiative. Intelligence suggests something big is coming.
+
+CloudVault's board has called an emergency session. Anticipate DataStorm's moves and prepare counter-strategies.`,
+      
+      marketData: {
+        totalMarket: 5.2,
+        cloudVaultShare: 45,
+        dataStormShare: 18,
+        othersShare: 37
+      },
+
+      rounds: [
+        { id: 1, name: "Intelligence Gathering", scenario: "Market rumors suggest DataStorm is preparing a major announcement.", blueObjective: "Assess threats and prepare defensive positions", redObjective: "Plan your opening move" },
+        { id: 2, name: "Opening Moves", scenario: "DataStorm has made their first move. The market is reacting.", blueObjective: "Respond to competitor actions", redObjective: "Press your advantage" },
+        { id: 3, name: "Escalation", scenario: "Competition intensifies. Both companies deploying resources.", blueObjective: "Counter-attack or consolidate", redObjective: "Maintain momentum" },
+        { id: 4, name: "Resolution", scenario: "Final moves before the quarter closes.", blueObjective: "Secure position", redObjective: "Consolidate gains" }
+      ]
+    };
+
+    // ==================== STRATEGIC OPTIONS ====================
+    const STRATEGIC_OPTIONS = {
+      blue: [
+        { id: 'price_hold', name: 'Hold Pricing', description: 'Maintain premium at €50/user', impact: { marketShare: -2, brand: 5 }, risk: 'low' },
+        { id: 'price_match', name: 'Price Match', description: 'Reduce to €40/user', impact: { marketShare: 2, brand: -10 }, risk: 'medium' },
+        { id: 'price_war', name: 'Aggressive Pricing', description: 'Undercut at €30/user', impact: { marketShare: 8, brand: -20 }, risk: 'high' },
+        { id: 'feature_bundle', name: 'Feature Bundle', description: 'Add premium features', impact: { marketShare: 3, brand: 10 }, risk: 'medium' },
+        { id: 'enterprise_lock', name: 'Enterprise Lock-in', description: '3-year contracts, 20% discount', impact: { marketShare: 1, brand: 0 }, risk: 'low' },
+        { id: 'innovation', name: 'Innovation Push', description: 'Announce AI features', impact: { marketShare: 4, brand: 15 }, risk: 'medium' },
+        { id: 'acquisition', name: 'Acquire Competitor', description: 'Consolidate market', impact: { marketShare: 8, brand: 5 }, risk: 'high' },
+        { id: 'partnership', name: 'Strategic Partnership', description: 'Partner with enterprise vendor', impact: { marketShare: 5, brand: 12 }, risk: 'low' }
+      ],
+      red: [
+        { id: 'price_attack', name: 'Price Attack', description: 'Launch at €25/user', impact: { marketShare: 10, brand: -5 }, risk: 'high' },
+        { id: 'freemium', name: 'Freemium Model', description: 'Free tier for SMBs', impact: { marketShare: 15, brand: 10 }, risk: 'high' },
+        { id: 'enterprise_raid', name: 'Enterprise Raid', description: 'Target top 50 accounts', impact: { marketShare: 6, brand: -8 }, risk: 'medium' },
+        { id: 'feature_parity', name: 'Feature Parity', description: 'Match features in 90 days', impact: { marketShare: 5, brand: 8 }, risk: 'medium' },
+        { id: 'vertical_focus', name: 'Vertical Focus', description: 'Dominate healthcare/finance', impact: { marketShare: 4, brand: 15 }, risk: 'low' },
+        { id: 'channel_expansion', name: 'Channel Expansion', description: '500 new resellers', impact: { marketShare: 7, brand: 5 }, risk: 'medium' },
+        { id: 'talent_raid', name: 'Talent Raid', description: 'Recruit their engineers', impact: { marketShare: 2, brand: -5 }, risk: 'low' },
+        { id: 'geographic', name: 'Geographic Expansion', description: 'Launch in 10 countries', impact: { marketShare: 8, brand: 10 }, risk: 'medium' }
+      ]
+    };
+
+    const SHOCK_EVENTS = [
+      { id: 'data_breach', name: '🔓 Data Breach', description: 'A competitor suffers security breach.', impact: { blueShare: 3, redShare: -2 } },
+      { id: 'regulation', name: '📋 New Regulation', description: 'EU announces stricter data requirements.', impact: { blueShare: 2, redShare: 1 } },
+      { id: 'economic', name: '📉 Economic Downturn', description: 'Tech budget cuts across enterprises.', impact: { blueShare: -3, redShare: 2 } },
+      { id: 'new_entrant', name: '🚀 Tech Giant Enters', description: 'Major company announces offering.', impact: { blueShare: -4, redShare: -3 } },
+      { id: 'ai_breakthrough', name: '🤖 AI Breakthrough', description: 'New AI transforms expectations.', impact: { blueShare: 2, redShare: 3 } }
+    ];
+
+    const INTEL_REPORTS = [
+      { id: 'intel_a', name: '📊 Intel A', content: 'DataStorm hired 45 new enterprise sales execs in 60 days.' },
+      { id: 'intel_b', name: '📊 Intel B', content: 'Patent filings show AI-powered data classification development.' },
+      { id: 'intel_c', name: '📊 Intel C', content: 'CloudVault leads security (4.8/5) but lags pricing perception (3.2/5).' }
+    ];
+
+    // ==================== INITIAL STATE ====================
+    const getInitialState = () => ({
+      gamePhase: 'setup',
+      currentRound: 1,
+      timeRemaining: GAME_CONFIG.roundDurationMinutes * 60,
+      isTimerRunning: false,
+      blueDecisions: [],
+      redDecisions: [],
+      shocksApplied: [],
+      intelReleased: [],
+      marketState: { ...CASE_STUDY.marketData },
+      messages: [],
+      roundResults: [],
+      lastUpdate: Date.now()
+    });
+
+    // ==================== MAIN APP ====================
+    const WarGameSimulator = () => {
+      const [roomCode, setRoomCode] = useState('');
+      const [currentTeam, setCurrentTeam] = useState(null);
+      const [gameState, setGameState] = useState(getInitialState());
+      const [connectionStatus, setConnectionStatus] = useState('disconnected');
+      const [notifications, setNotifications] = useState([]);
+      const [inputRoomCode, setInputRoomCode] = useState('');
+      const timerRef = useRef(null);
+      const dbRef = useRef(null);
+
+      // Generate random room code
+      const generateRoomCode = () => {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+        return code;
+      };
+
+      // Firebase sync
+      useEffect(() => {
+        if (!database || !roomCode) return;
+
+        dbRef.current = database.ref(`wargames/${roomCode}`);
+        
+        // Listen for changes
+        const unsubscribe = dbRef.current.on('value', (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            setGameState(data);
+            setConnectionStatus('connected');
+          }
+        });
+
+        setConnectionStatus('connected');
+
+        return () => {
+          dbRef.current.off('value', unsubscribe);
+        };
+      }, [roomCode]);
+
+      // Local storage fallback sync (same browser)
+      useEffect(() => {
+        if (database && roomCode) return; // Use Firebase if available
+        if (!roomCode) return;
+
+        const key = `wargame_${roomCode}`;
+        
+        const poll = setInterval(() => {
+          const saved = localStorage.getItem(key);
+          if (saved) {
+            const data = JSON.parse(saved);
+            if (data.lastUpdate > gameState.lastUpdate) {
+              setGameState(data);
+            }
+          }
+        }, 500);
+
+        setConnectionStatus('local');
+        return () => clearInterval(poll);
+      }, [roomCode, gameState.lastUpdate]);
+
+      // Timer (Control only)
+      useEffect(() => {
+        if (currentTeam !== 'control' || !gameState.isTimerRunning || gameState.timeRemaining <= 0) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          return;
+        }
+
+        timerRef.current = setInterval(() => {
+          setGameState(prev => {
+            const newTime = prev.timeRemaining - 1;
+            const newState = { ...prev, timeRemaining: newTime, lastUpdate: Date.now() };
+            if (newTime <= 0) newState.isTimerRunning = false;
+            saveState(newState);
+            return newState;
+          });
+        }, 1000);
+
+        return () => clearInterval(timerRef.current);
+      }, [currentTeam, gameState.isTimerRunning, gameState.gamePhase]);
+
+      const saveState = (state) => {
+        const toSave = { ...state, lastUpdate: Date.now() };
+        
+        if (database && roomCode && dbRef.current) {
+          dbRef.current.set(toSave);
+        } else if (roomCode) {
+          localStorage.setItem(`wargame_${roomCode}`, JSON.stringify(toSave));
+        }
+      };
+
+      const updateState = (updates) => {
+        const newState = { ...gameState, ...updates, lastUpdate: Date.now() };
+        setGameState(newState);
+        saveState(newState);
+      };
+
+      const addNotification = (msg, type = 'info') => {
+        const id = Date.now();
+        setNotifications(prev => [...prev, { id, message: msg, type }]);
+        setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 4000);
+      };
+
+      const createRoom = () => {
+        const code = generateRoomCode();
+        setRoomCode(code);
+        const initial = getInitialState();
+        setGameState(initial);
+        
+        if (database) {
+          database.ref(`wargames/${code}`).set(initial);
+        } else {
+          localStorage.setItem(`wargame_${code}`, JSON.stringify(initial));
+        }
+        
+        addNotification(`Room created: ${code}`, 'success');
+      };
+
+      const joinRoom = () => {
+        if (inputRoomCode.length >= 4) {
+          const code = inputRoomCode.toUpperCase();
+          setRoomCode(code);
+          addNotification(`Joined room: ${code}`, 'success');
+        }
+      };
+
+      const selectTeam = (team) => {
+        setCurrentTeam(team);
+        updateState({ gamePhase: 'briefing' });
+      };
+
+      const startGame = () => {
+        updateState({ 
+          gamePhase: 'playing', 
+          isTimerRunning: true, 
+          timeRemaining: GAME_CONFIG.roundDurationMinutes * 60 
+        });
+        addNotification('🚀 Game started!', 'success');
+      };
+
+      const submitDecision = (decision) => {
+        const key = currentTeam === 'blue' ? 'blueDecisions' : 'redDecisions';
+        const existing = gameState[key].filter(d => d.round !== gameState.currentRound);
+        updateState({
+          [key]: [...existing, { ...decision, round: gameState.currentRound, timestamp: Date.now() }]
+        });
+        addNotification(`✅ ${decision.name} submitted!`, 'success');
+      };
+
+      const applyShock = (shock) => {
+        updateState({
+          shocksApplied: [...gameState.shocksApplied, { ...shock, round: gameState.currentRound }],
+          messages: [...gameState.messages, { type: 'shock', content: shock.name, detail: shock.description, round: gameState.currentRound }]
+        });
+        addNotification(`🌩️ Shock applied!`, 'warning');
+      };
+
+      const releaseIntel = (intel) => {
+        updateState({
+          intelReleased: [...gameState.intelReleased, { ...intel, round: gameState.currentRound }],
+          messages: [...gameState.messages, { type: 'intel', content: intel.name, detail: intel.content, round: gameState.currentRound }]
+        });
+        addNotification(`📊 Intel released!`, 'info');
+      };
+
+      const advanceRound = () => {
+        const blue = gameState.blueDecisions.find(d => d.round === gameState.currentRound);
+        const red = gameState.redDecisions.find(d => d.round === gameState.currentRound);
+        const shocks = gameState.shocksApplied.filter(s => s.round === gameState.currentRound);
+
+        let change = { blue: 0, red: 0 };
+        if (blue) change.blue += blue.impact?.marketShare || 0;
+        if (red) change.red += red.impact?.marketShare || 0;
+        shocks.forEach(s => {
+          change.blue += s.impact?.blueShare || 0;
+          change.red += s.impact?.redShare || 0;
+        });
+
+        const newMarket = {
+          ...gameState.marketState,
+          cloudVaultShare: Math.max(20, Math.min(60, gameState.marketState.cloudVaultShare + change.blue)),
+          dataStormShare: Math.max(10, Math.min(40, gameState.marketState.dataStormShare + change.red))
+        };
+        newMarket.othersShare = 100 - newMarket.cloudVaultShare - newMarket.dataStormShare;
+
+        const result = {
+          round: gameState.currentRound,
+          blueDecision: blue?.name || 'No action',
+          redDecision: red?.name || 'No action',
+          shocks: shocks.map(s => s.name),
+          finalShares: newMarket
+        };
+
+        if (gameState.currentRound < GAME_CONFIG.totalRounds) {
+          updateState({
+            currentRound: gameState.currentRound + 1,
+            timeRemaining: GAME_CONFIG.roundDurationMinutes * 60,
+            isTimerRunning: false,
+            marketState: newMarket,
+            roundResults: [...gameState.roundResults, result]
+          });
+          addNotification(`Round ${gameState.currentRound + 1} starting!`, 'info');
+        } else {
+          updateState({
+            gamePhase: 'debrief',
+            isTimerRunning: false,
+            marketState: newMarket,
+            roundResults: [...gameState.roundResults, result]
+          });
+        }
+      };
+
+      const resetGame = () => {
+        const fresh = getInitialState();
+        setGameState(fresh);
+        saveState(fresh);
+        setCurrentTeam(null);
+      };
+
+      const formatTime = (s) => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+
+      // ==================== SCREENS ====================
+
+      // Setup Screen - Room Creation/Join
+      const SetupScreen = () => (
+        <div className="min-h-screen flex items-center justify-center p-6">
+          <div className="max-w-md w-full">
+            <div className="text-center mb-10">
+              <h1 className="text-4xl font-bold text-white mb-3">⚔️ CI War Game</h1>
+              <p className="text-slate-400">{CASE_STUDY.title}</p>
+              
+              {!isFirebaseConfigured && (
+                <div className="mt-4 bg-amber-500/20 border border-amber-500/50 rounded-lg p-4 text-left">
+                  <p className="text-amber-300 text-sm font-semibold mb-2">⚠️ Firebase not configured</p>
+                  <p className="text-amber-200/80 text-xs">Sync will only work in same browser. To enable cross-computer sync, configure Firebase in the HTML file.</p>
+                </div>
+              )}
+              
+              {isFirebaseConfigured && (
+                <div className="mt-4 bg-green-500/20 border border-green-500/50 rounded-lg p-3">
+                  <p className="text-green-300 text-sm">✅ Firebase connected - Cross-computer sync enabled!</p>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-800 rounded-xl p-6 mb-6">
+              <h2 className="text-white font-bold text-lg mb-4">Create New Game</h2>
+              <button
+                onClick={createRoom}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-500 hover:to-purple-500"
+              >
+                🎮 Create Room
+              </button>
+            </div>
+
+            <div className="bg-slate-800 rounded-xl p-6">
+              <h2 className="text-white font-bold text-lg mb-4">Join Existing Game</h2>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={inputRoomCode}
+                  onChange={(e) => setInputRoomCode(e.target.value.toUpperCase())}
+                  placeholder="Enter room code"
+                  maxLength={6}
+                  className="flex-1 bg-slate-700 text-white px-4 py-3 rounded-xl text-center text-xl font-mono tracking-widest uppercase"
+                />
+                <button
+                  onClick={joinRoom}
+                  disabled={inputRoomCode.length < 4}
+                  className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-500 disabled:opacity-50"
+                >
+                  Join
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+
+      // Team Selection
+      const TeamSelectionScreen = () => (
+        <div className="min-h-screen flex items-center justify-center p-6">
+          <div className="max-w-2xl w-full">
+            <div className="text-center mb-8">
+              <div className="inline-block bg-purple-500/20 text-purple-300 px-4 py-2 rounded-lg text-2xl font-mono mb-4">
+                Room: {roomCode}
+              </div>
+              <h2 className="text-2xl font-bold text-white">Select Your Team</h2>
+              <p className="text-slate-400 text-sm mt-2">Share the room code with other players</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              {Object.entries(GAME_CONFIG.teams).map(([key, team]) => (
+                <button
+                  key={key}
+                  onClick={() => selectTeam(key)}
+                  className={`p-6 rounded-xl border-2 transition-all hover:scale-105 ${
+                    key === 'blue' ? 'bg-blue-900/30 border-blue-500/50 hover:border-blue-400' :
+                    key === 'red' ? 'bg-red-900/30 border-red-500/50 hover:border-red-400' :
+                    'bg-purple-900/30 border-purple-500/50 hover:border-purple-400'
+                  }`}
+                >
+                  <div className="text-4xl mb-3">{team.icon}</div>
+                  <h3 className="text-white font-bold">{team.name}</h3>
+                  <p className="text-slate-400 text-sm">{team.role}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+
+      // Briefing Screen
+      const BriefingScreen = () => (
+        <div className="min-h-screen p-6">
+          <div className="max-w-3xl mx-auto">
+            <div className="bg-slate-800 rounded-xl p-6 mb-6">
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-2xl font-bold text-white">{CASE_STUDY.title}</h2>
+                <span className="bg-purple-500/20 text-purple-300 px-3 py-1 rounded-lg font-mono">{roomCode}</span>
+              </div>
+              
+              <div className="bg-slate-900 rounded-lg p-4 mb-4">
+                <p className="text-slate-300 text-sm whitespace-pre-line">{CASE_STUDY.background}</p>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-blue-500/20 rounded-lg p-3 text-center">
+                  <div className="text-xl font-bold text-blue-400">{gameState.marketState.cloudVaultShare}%</div>
+                  <div className="text-xs text-slate-400">CloudVault</div>
+                </div>
+                <div className="bg-red-500/20 rounded-lg p-3 text-center">
+                  <div className="text-xl font-bold text-red-400">{gameState.marketState.dataStormShare}%</div>
+                  <div className="text-xs text-slate-400">DataStorm</div>
+                </div>
+                <div className="bg-slate-700 rounded-lg p-3 text-center">
+                  <div className="text-xl font-bold text-slate-300">4</div>
+                  <div className="text-xs text-slate-400">Rounds</div>
+                </div>
+              </div>
+            </div>
+
+            <div className={`rounded-xl p-5 mb-6 border ${
+              currentTeam === 'blue' ? 'bg-blue-900/20 border-blue-500/30' :
+              currentTeam === 'red' ? 'bg-red-900/20 border-red-500/30' :
+              'bg-purple-900/20 border-purple-500/30'
+            }`}>
+              <h3 className="text-white font-bold mb-2">🎯 Your Role: {GAME_CONFIG.teams[currentTeam].name}</h3>
+              <p className="text-slate-300 text-sm">
+                {currentTeam === 'blue' && 'Defend your market position against DataStorm.'}
+                {currentTeam === 'red' && 'Disrupt CloudVault and capture market share.'}
+                {currentTeam === 'control' && 'Facilitate: release intel, trigger shocks, manage time.'}
+              </p>
+            </div>
+
+            <div className="text-center">
+              {currentTeam === 'control' ? (
+                <button onClick={startGame} className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-4 rounded-xl font-bold text-lg animate-pulse">
+                  🚀 START GAME
+                </button>
+              ) : (
+                <div className="bg-slate-700 text-slate-300 px-6 py-4 rounded-xl inline-flex items-center gap-3">
+                  <div className="w-3 h-3 bg-amber-500 rounded-full pulse"></div>
+                  Waiting for Control Team to start...
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+
+      // Game Screen
+      const GameScreen = () => {
+        const team = GAME_CONFIG.teams[currentTeam];
+        const round = CASE_STUDY.rounds[gameState.currentRound - 1];
+        const options = STRATEGIC_OPTIONS[currentTeam] || [];
+        const myDecision = currentTeam === 'blue' 
+          ? gameState.blueDecisions.find(d => d.round === gameState.currentRound)
+          : currentTeam === 'red' 
+          ? gameState.redDecisions.find(d => d.round === gameState.currentRound)
+          : null;
+
+        return (
+          <div className="min-h-screen bg-slate-900">
+            {/* Header */}
+            <div className={`p-3 sticky top-0 z-40 shadow-lg ${
+              currentTeam === 'blue' ? 'bg-blue-900' : currentTeam === 'red' ? 'bg-red-900' : 'bg-purple-900'
+            }`}>
+              <div className="max-w-6xl mx-auto flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{team.icon}</span>
+                  <div>
+                    <div className="text-white font-bold text-sm">{team.name}</div>
+                    <div className="text-slate-300 text-xs">Round {gameState.currentRound}/4 • {round.name}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="bg-slate-800 px-3 py-1 rounded-lg text-slate-300 text-sm font-mono">{roomCode}</span>
+                  <div className={`text-2xl font-mono font-bold ${gameState.timeRemaining < 60 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
+                    {formatTime(gameState.timeRemaining)}
+                  </div>
+                  {currentTeam === 'control' && (
+                    <div className="flex gap-2">
+                      <button onClick={() => updateState({ isTimerRunning: !gameState.isTimerRunning })} className={`px-3 py-1 rounded-lg text-sm font-semibold ${gameState.isTimerRunning ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
+                        {gameState.isTimerRunning ? '⏸️' : '▶️'}
+                      </button>
+                      <button onClick={advanceRound} className="bg-purple-500 text-white px-3 py-1 rounded-lg text-sm font-semibold">
+                        ⏭️ Next
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="max-w-6xl mx-auto p-4">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Left: Market & Intel */}
+                <div className="space-y-4">
+                  <div className="bg-slate-800 rounded-xl p-4">
+                    <h3 className="text-white font-bold mb-3 text-sm">📊 Market</h3>
+                    <div className="space-y-2">
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-blue-400">CloudVault</span>
+                          <span className="text-white font-bold">{gameState.marketState.cloudVaultShare}%</span>
+                        </div>
+                        <div className="h-2 bg-slate-700 rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{width:`${gameState.marketState.cloudVaultShare}%`}}></div></div>
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1">
+                          <span className="text-red-400">DataStorm</span>
+                          <span className="text-white font-bold">{gameState.marketState.dataStormShare}%</span>
+                        </div>
+                        <div className="h-2 bg-slate-700 rounded-full"><div className="h-full bg-red-500 rounded-full" style={{width:`${gameState.marketState.dataStormShare}%`}}></div></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-800 rounded-xl p-4">
+                    <h3 className="text-white font-bold mb-3 text-sm">📡 Intel Feed</h3>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {gameState.messages.length === 0 ? (
+                        <p className="text-slate-500 text-xs italic">No intel yet...</p>
+                      ) : gameState.messages.slice().reverse().map((m, i) => (
+                        <div key={i} className={`p-2 rounded-lg text-xs ${m.type === 'shock' ? 'bg-amber-500/20' : 'bg-blue-500/20'}`}>
+                          <div className="font-semibold text-white">{m.content}</div>
+                          <div className="text-slate-300 mt-1">{m.detail}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-800 rounded-xl p-4">
+                    <h3 className="text-white font-bold mb-3 text-sm">📋 Decisions</h3>
+                    <div className="space-y-2">
+                      <div className={`p-2 rounded-lg text-sm ${gameState.blueDecisions.find(d => d.round === gameState.currentRound) ? 'bg-blue-500/20' : 'bg-slate-700'}`}>
+                        <span className="text-slate-400 text-xs">CloudVault:</span>
+                        <span className="text-white ml-2">{gameState.blueDecisions.find(d => d.round === gameState.currentRound)?.name || '⏳'}</span>
+                      </div>
+                      <div className={`p-2 rounded-lg text-sm ${gameState.redDecisions.find(d => d.round === gameState.currentRound) ? 'bg-red-500/20' : 'bg-slate-700'}`}>
+                        <span className="text-slate-400 text-xs">DataStorm:</span>
+                        <span className="text-white ml-2">{gameState.redDecisions.find(d => d.round === gameState.currentRound)?.name || '⏳'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Actions */}
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="bg-slate-800 rounded-xl p-4">
+                    <h3 className="text-white font-bold mb-2">📍 {round.name}</h3>
+                    <p className="text-slate-300 text-sm">{round.scenario}</p>
+                    <div className="mt-2 bg-slate-700 text-slate-200 px-3 py-2 rounded-lg text-sm">
+                      <strong>Objective:</strong> {currentTeam === 'blue' ? round.blueObjective : currentTeam === 'red' ? round.redObjective : 'Facilitate the game'}
+                    </div>
+                  </div>
+
+                  {/* Control Panel */}
+                  {currentTeam === 'control' && (
+                    <div className="bg-purple-900/30 rounded-xl p-4 border border-purple-500/30">
+                      <h3 className="text-purple-300 font-bold mb-3 text-sm">🎛️ Control Panel</h3>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <h4 className="text-white text-xs font-semibold mb-2">Release Intel</h4>
+                          <div className="space-y-1">
+                            {INTEL_REPORTS.filter(i => !gameState.intelReleased.find(r => r.id === i.id)).map(intel => (
+                              <button key={intel.id} onClick={() => releaseIntel(intel)} className="w-full text-left p-2 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300">{intel.name}</button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <h4 className="text-white text-xs font-semibold mb-2">Trigger Shock</h4>
+                          <div className="space-y-1">
+                            {SHOCK_EVENTS.map(shock => (
+                              <button key={shock.id} onClick={() => applyShock(shock)} className="w-full text-left p-2 bg-amber-500/20 hover:bg-amber-500/30 rounded text-xs text-amber-200">{shock.name}</button>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Strategy Selection */}
+                  {(currentTeam === 'blue' || currentTeam === 'red') && (
+                    <div className="bg-slate-800 rounded-xl p-4">
+                      <h3 className="text-white font-bold mb-3 text-sm">
+                        ⚔️ Select Strategy {myDecision && <span className="text-green-400">✓</span>}
+                      </h3>
+                      <div className="grid grid-cols-2 gap-2">
+                        {options.map(opt => (
+                          <button
+                            key={opt.id}
+                            onClick={() => submitDecision(opt)}
+                            className={`text-left p-3 rounded-lg border transition-all ${
+                              myDecision?.id === opt.id 
+                                ? (currentTeam === 'blue' ? 'bg-blue-500/30 border-blue-500' : 'bg-red-500/30 border-red-500')
+                                : 'bg-slate-700 border-slate-600 hover:border-slate-400'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start">
+                              <span className="text-white font-semibold text-sm">{opt.name}</span>
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                opt.risk === 'high' ? 'bg-red-500/30 text-red-300' :
+                                opt.risk === 'medium' ? 'bg-amber-500/30 text-amber-300' :
+                                'bg-green-500/30 text-green-300'
+                              }`}>{opt.risk}</span>
+                            </div>
+                            <p className="text-slate-400 text-xs mt-1">{opt.description}</p>
+                            {myDecision?.id === opt.id && <div className="text-green-400 text-xs mt-1 font-semibold">✓ SELECTED</div>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      // Debrief Screen
+      const DebriefScreen = () => (
+        <div className="min-h-screen p-6 bg-slate-900">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold text-white mb-2">🏁 Game Complete</h1>
+              <span className="bg-slate-700 px-3 py-1 rounded-lg text-slate-300 font-mono">{roomCode}</span>
+            </div>
+
+            <div className="bg-slate-800 rounded-xl p-6 mb-6">
+              <h2 className="text-xl font-bold text-white mb-4 text-center">Final Results</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl text-center bg-blue-500/20">
+                  <div className="text-3xl mb-1">🛡️</div>
+                  <div className="text-white font-bold">CloudVault</div>
+                  <div className="text-3xl font-bold text-blue-400">{gameState.marketState.cloudVaultShare}%</div>
+                  <div className="text-xs text-slate-400">Started: 45%</div>
+                </div>
+                <div className="p-4 rounded-xl text-center bg-red-500/20">
+                  <div className="text-3xl mb-1">⚔️</div>
+                  <div className="text-white font-bold">DataStorm</div>
+                  <div className="text-3xl font-bold text-red-400">{gameState.marketState.dataStormShare}%</div>
+                  <div className="text-xs text-slate-400">Started: 18%</div>
+                </div>
+              </div>
+
+              {gameState.roundResults.length > 0 && (
+                <div className="mt-4 bg-slate-900 rounded-lg p-3">
+                  <table className="w-full text-sm">
+                    <thead><tr className="text-slate-400 border-b border-slate-700"><th className="text-left p-2">Round</th><th className="text-left p-2">CloudVault</th><th className="text-left p-2">DataStorm</th></tr></thead>
+                    <tbody>
+                      {gameState.roundResults.map(r => (
+                        <tr key={r.round} className="text-slate-300 border-b border-slate-700/50">
+                          <td className="p-2">R{r.round}</td>
+                          <td className="p-2">{r.blueDecision}</td>
+                          <td className="p-2">{r.redDecision}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-amber-900/30 rounded-xl p-5 mb-6 border border-amber-500/30">
+              <h3 className="text-amber-400 font-bold mb-3">💡 Debrief Questions</h3>
+              <ul className="text-slate-300 text-sm space-y-2">
+                <li>• What surprised you about your opponent's moves?</li>
+                <li>• What assumptions proved wrong?</li>
+                <li>• What would you do differently?</li>
+                <li>• What real companies face similar dynamics?</li>
+              </ul>
+            </div>
+
+            <div className="text-center">
+              <button onClick={resetGame} className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-bold">
+                🔄 Play Again
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+
+      // Connection Status
+      const StatusIndicator = () => (
+        <div className="fixed bottom-3 right-3 flex items-center gap-2 bg-slate-800 px-3 py-2 rounded-full text-xs z-50">
+          <div className={`sync-indicator ${connectionStatus === 'connected' ? 'bg-green-500' : connectionStatus === 'local' ? 'bg-amber-500' : 'bg-red-500'}`}></div>
+          <span className="text-slate-400">
+            {connectionStatus === 'connected' ? '☁️ Cloud Sync' : connectionStatus === 'local' ? '💻 Local Sync' : '⚫ Offline'}
+          </span>
+        </div>
+      );
+
+      // Notifications
+      const Notifications = () => (
+        <div className="fixed top-4 right-4 z-50 space-y-2">
+          {notifications.map(n => (
+            <div key={n.id} className={`slide-in p-3 rounded-lg shadow-lg text-sm text-white ${
+              n.type === 'success' ? 'bg-green-600' : n.type === 'warning' ? 'bg-amber-600' : 'bg-blue-600'
+            }`}>{n.message}</div>
+          ))}
+        </div>
+      );
+
+      // Main Render
+      const renderScreen = () => {
+        if (!roomCode) return <SetupScreen />;
+        if (!currentTeam) return <TeamSelectionScreen />;
+        if (gameState.gamePhase === 'setup') return <TeamSelectionScreen />;
+        if (gameState.gamePhase === 'briefing') return <BriefingScreen />;
+        if (gameState.gamePhase === 'playing') return <GameScreen />;
+        if (gameState.gamePhase === 'debrief') return <DebriefScreen />;
+        return <TeamSelectionScreen />;
+      };
+
+      return (
+        <>
+          <Notifications />
+          {roomCode && <StatusIndicator />}
+          {renderScreen()}
+        </>
+      );
+    };
+
+    ReactDOM.render(<WarGameSimulator />, document.getElementById('root'));
+  </script>
+</body>
+</html>
