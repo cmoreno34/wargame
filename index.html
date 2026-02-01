@@ -413,7 +413,7 @@
             <div className="bg-slate-800 rounded-xl p-6">
               <h2 className="text-white font-bold text-lg mb-4">Join Existing Game</h2>
               <div className="flex gap-3">
-                <input type="text" value={inputRoomCode} onChange={(e) => setInputRoomCode(e.target.value.toUpperCase())} placeholder="Room code" maxLength={6} className="flex-1 bg-slate-700 text-white px-4 py-3 rounded-xl text-center text-xl font-mono tracking-widest uppercase" />
+                <input type="text" value={inputRoomCode} onChange={(e) => { const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); setInputRoomCode(val); if (val.length >= 6) { setRoomCode(val.substring(0, 6)); addNotification(`Joined room: ${val.substring(0, 6)}`, 'success'); } }} placeholder="Paste or type room code" maxLength={6} autoFocus className="flex-1 bg-slate-700 text-white px-4 py-3 rounded-xl text-center text-xl font-mono tracking-widest uppercase" />
                 <button onClick={joinRoom} disabled={inputRoomCode.length < 4} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-500 disabled:opacity-50">Join</button>
               </div>
             </div>
@@ -966,11 +966,11 @@
       );
 
       const renderScreen = () => {
-        if (!roomCode) return <SetupScreen />;
-        if (!currentTeam) return <TeamSelectionScreen />;
-        if (gameState.gamePhase === 'playing') return <GameScreen />;
-        if (gameState.gamePhase === 'debrief') return <DebriefScreen />;
-        return <BriefingScreen />;
+        if (!roomCode) return SetupScreen();
+        if (!currentTeam) return TeamSelectionScreen();
+        if (gameState.gamePhase === 'playing') return GameScreen();
+        if (gameState.gamePhase === 'debrief') return DebriefScreen();
+        return BriefingScreen();
       };
 
       return (
