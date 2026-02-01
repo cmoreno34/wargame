@@ -17,6 +17,9 @@
     .sync-indicator { width: 10px; height: 10px; border-radius: 50%; }
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     .pulse { animation: pulse 1.5s infinite; }
+    .tab-active { border-bottom: 2px solid #818cf8; color: #c7d2fe; }
+    .tab-inactive { border-bottom: 2px solid transparent; color: #64748b; }
+    .tab-inactive:hover { color: #94a3b8; }
   </style>
 </head>
 <body class="bg-slate-900 min-h-screen">
@@ -25,47 +28,23 @@
   <script type="text/babel">
     const { useState, useEffect, useRef, Component } = React;
 
-    // Error Boundary to catch render errors and show them instead of dark screen
+    // Error Boundary
     class ErrorBoundary extends Component {
-      constructor(props) {
-        super(props);
-        this.state = { hasError: false, error: null };
-      }
-      static getDerivedStateFromError(error) {
-        return { hasError: true, error };
-      }
-      componentDidCatch(error, info) {
-        console.error('War Game Error:', error, info);
-      }
+      constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+      static getDerivedStateFromError(error) { return { hasError: true, error }; }
+      componentDidCatch(error, info) { console.error('War Game Error:', error, info); }
       render() {
         if (this.state.hasError) {
-          return React.createElement('div', {
-            style: { padding: '40px', color: 'white', background: '#1e293b', minHeight: '100vh', fontFamily: 'monospace' }
-          },
+          return React.createElement('div', { style: { padding: '40px', color: 'white', background: '#1e293b', minHeight: '100vh', fontFamily: 'monospace' } },
             React.createElement('h1', { style: { color: '#f87171', fontSize: '24px', marginBottom: '16px' } }, 'Something went wrong'),
-            React.createElement('pre', { style: { color: '#fbbf24', whiteSpace: 'pre-wrap', fontSize: '14px' } },
-              String(this.state.error)
-            ),
-            React.createElement('button', {
-              onClick: () => { this.setState({ hasError: false, error: null }); },
-              style: { marginTop: '20px', padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' }
-            }, 'Try Again')
+            React.createElement('pre', { style: { color: '#fbbf24', whiteSpace: 'pre-wrap', fontSize: '14px' } }, String(this.state.error)),
+            React.createElement('button', { onClick: () => this.setState({ hasError: false, error: null }), style: { marginTop: '20px', padding: '10px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' } }, 'Try Again')
           );
         }
         return this.props.children;
       }
     }
 
-    // ╔════════════════════════════════════════════════════════════════════════════╗
-    // ║  FIREBASE CONFIGURATION - YOU MUST REPLACE THIS WITH YOUR OWN CONFIG!     ║
-    // ║                                                                            ║
-    // ║  1. Go to https://console.firebase.google.com/                            ║
-    // ║  2. Create a new project (free)                                           ║
-    // ║  3. Go to "Realtime Database" → Create Database → Start in TEST MODE      ║
-    // ║  4. Go to Project Settings → Your Apps → Web App → Register               ║
-    // ║  5. Copy the firebaseConfig object and paste below                        ║
-    // ╚════════════════════════════════════════════════════════════════════════════╝
-    
     const FIREBASE_CONFIG = {
       apiKey: "AIzaSyAn3T4-mUz8hWjvu_U9JYxtWlLSq5jwnek",
       authDomain: "wargame-classroom.firebaseapp.com",
@@ -76,23 +55,16 @@
       appId: "1:423551977862:web:a6b9532c95d595a5378407"
     };
 
-    // Check if Firebase is configured
     const isFirebaseConfigured = !FIREBASE_CONFIG.apiKey.includes("YOUR_");
-
-    // Initialize Firebase if configured
     let database = null;
     if (isFirebaseConfigured) {
       try {
         firebase.initializeApp(FIREBASE_CONFIG);
         database = firebase.database();
-        // Test actual connection
         database.ref('.info/connected').on('value', (snap) => {
           console.log(snap.val() ? '✅ Firebase CONNECTED' : '❌ Firebase DISCONNECTED');
         });
-        console.log("✅ Firebase initialized!");
-      } catch (e) {
-        console.error("Firebase init error:", e);
-      }
+      } catch (e) { console.error("Firebase init error:", e); }
     }
 
     // ==================== GAME CONFIGURATION ====================
@@ -110,78 +82,132 @@
     const CASE_STUDY = {
       title: "The CloudVault Crisis",
       subtitle: "Enterprise Cloud Storage Market - Q1 2026",
-      background: `CloudVault dominates the enterprise cloud storage market with 45% market share and €2.4B annual revenue. Their premium pricing (€50/user/month) reflects superior security features.
-
-DataStorm, an aggressive challenger with 18% market share, has announced "Project Thunder" - a major strategic initiative. Intelligence suggests something big is coming.
-
-CloudVault's board has called an emergency session. Anticipate DataStorm's moves and prepare counter-strategies.`,
-      
-      marketData: {
-        totalMarket: 5.2,
-        cloudVaultShare: 45,
-        dataStormShare: 18,
-        othersShare: 37
-      },
-
+      background: `CloudVault dominates the enterprise cloud storage market with 45% market share and €2.4B annual revenue. Their premium pricing (€50/user/month) reflects superior security features.\n\nDataStorm, an aggressive challenger with 18% market share, has announced "Project Thunder" - a major strategic initiative. Intelligence suggests something big is coming.\n\nCloudVault's board has called an emergency session. Anticipate DataStorm's moves and prepare counter-strategies.`,
+      marketData: { totalMarket: 5.2, cloudVaultShare: 45, dataStormShare: 18, othersShare: 37 },
       rounds: [
-        { id: 1, name: "Intelligence Gathering", scenario: "Market rumors suggest DataStorm is preparing a major announcement.", blueObjective: "Assess threats and prepare defensive positions", redObjective: "Plan your opening move" },
-        { id: 2, name: "Opening Moves", scenario: "DataStorm has made their first move. The market is reacting.", blueObjective: "Respond to competitor actions", redObjective: "Press your advantage" },
-        { id: 3, name: "Escalation", scenario: "Competition intensifies. Both companies deploying resources.", blueObjective: "Counter-attack or consolidate", redObjective: "Maintain momentum" },
-        { id: 4, name: "Resolution", scenario: "Final moves before the quarter closes.", blueObjective: "Secure position", redObjective: "Consolidate gains" }
+        { id: 1, name: "Intelligence Gathering", scenario: "Market rumors suggest DataStorm is preparing a major announcement. Your intelligence network has picked up signals but the full picture is unclear.",
+          blueObjective: "Assess threats and prepare defensive positions",
+          redObjective: "Plan your opening move while maintaining secrecy",
+          framework: "AMC", frameworkTitle: "AMC Framework — Awareness-Motivation-Capability",
+          blueGuidance: "Apply the AMC Framework (Chen & Miller, 2012) to predict DataStorm's likely move:\n\n• AWARENESS: What signals has DataStorm sent? (45 new sales hires = high visibility signal)\n• MOTIVATION: Project Thunder targets YOUR core market — motivation is HIGH\n• CAPABILITY: Do they have the resources? Check Intel Reports for clues\n\nUse the Competitive Repertoire Radar to assess DataStorm's likely action type. Their history shows high volume + speed = expect aggressive pricing or enterprise raid.",
+          redGuidance: "Think about MOVE VISIBILITY (TN01). You can:\n\n• HIGH VISIBILITY: Public price announcement signals commitment and deters CloudVault from matching (but gives them time to prepare)\n• LOW VISIBILITY: Quiet enterprise raids build position before CloudVault can react\n\nConsider the Action-Response Cascade: your opening move will trigger CloudVault's response. What second-order effects do you want?",
+          controlGuidance: "Release Intel A early to give teams data for AMC analysis. Consider timing Intel B to simulate how real intelligence arrives in fragments."
+        },
+        { id: 2, name: "Opening Moves", scenario: "DataStorm has made their first move. The market is reacting. Enterprise customers are evaluating both offerings.",
+          blueObjective: "Respond to competitor actions using competitive dynamics analysis",
+          redObjective: "Press your advantage and exploit CloudVault's response time",
+          framework: "REPERTOIRE", frameworkTitle: "Competitive Repertoire Analysis — How Will They Respond?",
+          blueGuidance: "Now apply Competitive Repertoire Analysis (Miller & Chen, 1996):\n\n• ACTION VOLUME: DataStorm is making aggressive moves — match their tempo or risk losing ground\n• ACTION COMPLEXITY: Respond across multiple dimensions (price + features + partnerships) to be harder to counter\n• RESPONSE SPEED: Your industry Response Clock is 2-4 weeks. Fast response deters further attacks.\n\nConsider the Motivation Assessment Matrix:\n- Is DataStorm's attack on a HIGH strategic importance market? → YES\n- Do you have resources to respond? → Assess your capability honestly",
+          redGuidance: "Analyze CloudVault's Competitive Repertoire:\n\n• HISTORICAL PATTERN: CloudVault typically responds with premium positioning, not price wars\n• UNPREDICTABILITY: If they deviate from pattern (e.g., price war), it signals desperation\n• EXPLOIT THEIR DNA: CloudVault's 'premium' organizational culture makes price-matching psychologically difficult\n\nUse the Market Commonality / Resource Similarity framework: You share HIGH market commonality but LOWER resource similarity — use asymmetric strategies.",
+          controlGuidance: "This is a good round to trigger a Shock Event. Shocks test the robustness of strategies (ABP — Assumption-Based Planning). Consider 'New Regulation' or 'Economic Downturn' to force adaptation."
+        },
+        { id: 3, name: "Escalation", scenario: "Competition intensifies. Both companies are deploying significant resources. The market is watching closely.",
+          blueObjective: "Counter-attack or consolidate — evaluate using Exchange Value",
+          redObjective: "Maintain momentum — assess sustainability of your position",
+          framework: "EXCHANGE", frameworkTitle: "Exchange Value Methodology — What Is Each Move Worth?",
+          blueGuidance: "Apply the Exchange Value methodology (Nagle, Hogan & Zale, 2016):\n\n• REFERENCE VALUE: What happens if you do nothing? (Baseline scenario — continued share loss)\n• DIFFERENTIAL VALUE of each option:\n  - Price Match: +2% share but -€240M revenue loss (brand damage)\n  - Innovation Push: +4% share, preserves premium positioning\n  - Enterprise Lock-in: Secures existing base, low risk\n\nCalculate Expected Value: EV = Σ(Probability × Outcome)\nWeight each scenario by AMC-derived response probabilities.",
+          redGuidance: "Evaluate your position with Assumption-Based Planning (ABP — Dewar, 2002):\n\n• LOAD-BEARING ASSUMPTIONS: What must remain true for your strategy to work?\n  - 'CloudVault won't match our price' → Is this still valid?\n  - 'Customers prioritize price over security' → Check Intel C\n• VULNERABLE ASSUMPTIONS: Which could fail?\n• HEDGING ACTIONS: What's your Plan B if CloudVault responds aggressively?\n\nDesign SHAPING ACTIONS: Can you influence the environment (e.g., public PR campaign) to make your assumptions more likely to hold?",
+          controlGuidance: "Release Intel C now — it reveals pricing perception gap that both teams need. Consider triggering 'Tech Giant Enters' shock to force both teams to reassess their competitive dyad (who is the REAL threat?)."
+        },
+        { id: 4, name: "Resolution", scenario: "Final moves before the quarter closes. Both sides must commit to their positions for the next fiscal period.",
+          blueObjective: "Secure position — build signposts for future monitoring",
+          redObjective: "Consolidate gains — establish sustainable competitive position",
+          framework: "SCENARIO", frameworkTitle: "Scenario Planning (Shell Method) — Planning for Multiple Futures",
+          blueGuidance: "Apply the Shell Method Scenario Planning for post-game strategy:\n\n• CRITICAL UNCERTAINTIES: What are the 2 biggest unknowns?\n  1. Will DataStorm sustain aggressive pricing? (Financial runway)\n  2. Will enterprise customers prioritize price over security?\n\n• BUILD 2×2 SCENARIO MATRIX with these two uncertainties\n• For each quadrant, identify SIGNPOSTS (early indicators):\n  - Leading indicators: DataStorm hiring patterns, funding announcements\n  - Tracking metrics: Win/loss rates, customer satisfaction scores\n  - Trigger events: Major security breach, regulatory change",
+          redGuidance: "Apply Scenario Planning to lock in your gains:\n\n• CRITICAL UNCERTAINTIES for DataStorm:\n  1. Can you maintain low pricing profitably?\n  2. Will CloudVault's innovation pipeline leapfrog your offering?\n\n• SIGNPOSTS to monitor:\n  - CloudVault patent filings (innovation pipeline indicator)\n  - Enterprise contract renewal rates (lock-in success indicator)\n  - Regulatory changes favoring security standards\n\n• SHAPING vs HEDGING:\n  - SHAPING: Invest in R&D to reduce dependency on price advantage\n  - HEDGING: Diversify into verticals where CloudVault is weak",
+          controlGuidance: "Final round — consider NOT triggering shocks to let teams execute their strategies. The debrief will analyze all four rounds comprehensively."
+        }
       ]
     };
 
-    // ==================== STRATEGIC OPTIONS ====================
+    // ==================== STRATEGIC OPTIONS (Enhanced with framework tags) ====================
     const STRATEGIC_OPTIONS = {
       blue: [
-        { id: 'price_hold', name: 'Hold Pricing', description: 'Maintain premium at €50/user', impact: { marketShare: -2, brand: 5 }, risk: 'low' },
-        { id: 'price_match', name: 'Price Match', description: 'Reduce to €40/user', impact: { marketShare: 2, brand: -10 }, risk: 'medium' },
-        { id: 'price_war', name: 'Aggressive Pricing', description: 'Undercut at €30/user', impact: { marketShare: 8, brand: -20 }, risk: 'high' },
-        { id: 'feature_bundle', name: 'Feature Bundle', description: 'Add premium features', impact: { marketShare: 3, brand: 10 }, risk: 'medium' },
-        { id: 'enterprise_lock', name: 'Enterprise Lock-in', description: '3-year contracts, 20% discount', impact: { marketShare: 1, brand: 0 }, risk: 'low' },
-        { id: 'innovation', name: 'Innovation Push', description: 'Announce AI features', impact: { marketShare: 4, brand: 15 }, risk: 'medium' },
-        { id: 'acquisition', name: 'Acquire Competitor', description: 'Consolidate market', impact: { marketShare: 8, brand: 5 }, risk: 'high' },
-        { id: 'partnership', name: 'Strategic Partnership', description: 'Partner with enterprise vendor', impact: { marketShare: 5, brand: 12 }, risk: 'low' }
+        { id: 'price_hold', name: 'Hold Pricing', description: 'Maintain premium at €50/user — signals confidence in value proposition', impact: { marketShare: -2, brand: 5, revenue: 0 }, risk: 'low', framework: 'Exchange Value: High reference value preservation. AMC: Low visibility move — competitor may not detect urgency.', category: 'defensive', exchangeValue: 'Maintains €2.4B revenue baseline. Risk: gradual share erosion.' },
+        { id: 'price_match', name: 'Price Match', description: 'Reduce to €40/user — follow competitor pricing signal', impact: { marketShare: 2, brand: -10, revenue: -480 }, risk: 'medium', framework: 'Repertoire: Predictable response. Exchange Value: -€480M revenue impact. ABP: Assumes customers are price-sensitive (load-bearing).', category: 'reactive', exchangeValue: 'Revenue drops to €1.92B. Share gain may not compensate.' },
+        { id: 'price_war', name: 'Aggressive Pricing', description: 'Undercut at €30/user — scorched earth approach', impact: { marketShare: 8, brand: -20, revenue: -960 }, risk: 'high', framework: 'Competitive Dynamics: Triggers escalation spiral. Exchange Value: -€960M revenue loss. ABP: Load-bearing assumption = "we can sustain losses longer than competitor."', category: 'aggressive', exchangeValue: 'Revenue drops to €1.44B. Only viable if DataStorm cannot sustain.' },
+        { id: 'feature_bundle', name: 'Feature Bundle', description: 'Add premium security features — differentiate on value not price', impact: { marketShare: 3, brand: 10, revenue: 100 }, risk: 'medium', framework: 'Porter: Differentiation strategy. Exchange Value: Positive differential value through non-price competition. Repertoire: Complex action — harder to counter.', category: 'strategic', exchangeValue: 'Revenue uplift potential +€100M. Preserves premium positioning.' },
+        { id: 'enterprise_lock', name: 'Enterprise Lock-in', description: '3-year contracts at 20% discount — secure the base', impact: { marketShare: 1, brand: 0, revenue: -200 }, risk: 'low', framework: 'ABP: Hedging action — reduces vulnerability to competitor raids. Exchange Value: Short-term revenue sacrifice for long-term security.', category: 'defensive', exchangeValue: 'Revenue impact -€200M but secures 70% of enterprise base.' },
+        { id: 'innovation', name: 'Innovation Push', description: 'Announce AI-powered features — leapfrog competition', impact: { marketShare: 4, brand: 15, revenue: 200 }, risk: 'medium', framework: 'Scenario Planning: Shaping action — changes competitive landscape. Competitive Dynamics: Resets the game to capability competition, not price.', category: 'strategic', exchangeValue: 'High potential: +€200M revenue if executed. Risk: execution delay.' },
+        { id: 'acquisition', name: 'Acquire Competitor', description: 'Buy a smaller player to consolidate market share', impact: { marketShare: 8, brand: 5, revenue: 300 }, risk: 'high', framework: 'Market Commonality: Reduces number of competitors. ABP: Load-bearing assumption = "regulatory approval" and "integration success."', category: 'aggressive', exchangeValue: 'Potential +€300M. High execution risk and regulatory uncertainty.' },
+        { id: 'partnership', name: 'Strategic Partnership', description: 'Partner with major enterprise vendor (e.g., SAP, Salesforce)', impact: { marketShare: 5, brand: 12, revenue: 250 }, risk: 'low', framework: 'ABP: Shaping action — builds ecosystem barrier. Repertoire: Complex, multi-dimensional move that is hard to counter.', category: 'strategic', exchangeValue: 'Revenue uplift +€250M through channel access. Low risk.' }
       ],
       red: [
-        { id: 'price_attack', name: 'Price Attack', description: 'Launch at €25/user', impact: { marketShare: 10, brand: -5 }, risk: 'high' },
-        { id: 'freemium', name: 'Freemium Model', description: 'Free tier for SMBs', impact: { marketShare: 15, brand: 10 }, risk: 'high' },
-        { id: 'enterprise_raid', name: 'Enterprise Raid', description: 'Target top 50 accounts', impact: { marketShare: 6, brand: -8 }, risk: 'medium' },
-        { id: 'feature_parity', name: 'Feature Parity', description: 'Match features in 90 days', impact: { marketShare: 5, brand: 8 }, risk: 'medium' },
-        { id: 'vertical_focus', name: 'Vertical Focus', description: 'Dominate healthcare/finance', impact: { marketShare: 4, brand: 15 }, risk: 'low' },
-        { id: 'channel_expansion', name: 'Channel Expansion', description: '500 new resellers', impact: { marketShare: 7, brand: 5 }, risk: 'medium' },
-        { id: 'talent_raid', name: 'Talent Raid', description: 'Recruit their engineers', impact: { marketShare: 2, brand: -5 }, risk: 'low' },
-        { id: 'geographic', name: 'Geographic Expansion', description: 'Launch in 10 countries', impact: { marketShare: 8, brand: 10 }, risk: 'medium' }
+        { id: 'price_attack', name: 'Price Attack', description: 'Launch at €25/user — 50% undercut to grab attention', impact: { marketShare: 10, brand: -5, revenue: 0 }, risk: 'high', framework: 'AMC: HIGH visibility move — CloudVault WILL detect immediately. Exchange Value: Revenue per user drops but volume compensates if adoption is fast.', category: 'aggressive', exchangeValue: 'Needs 2× user growth to match revenue. High cash burn risk.' },
+        { id: 'freemium', name: 'Freemium Model', description: 'Free tier for SMBs — land and expand strategy', impact: { marketShare: 15, brand: 10, revenue: -200 }, risk: 'high', framework: 'Competitive Dynamics: Changes the game entirely — CloudVault cannot match without destroying their business model. Scenario Planning: Creates new market segment.', category: 'disruptive', exchangeValue: 'Long-term play: -€200M now, but builds massive user base for upsell.' },
+        { id: 'enterprise_raid', name: 'Enterprise Raid', description: 'Target CloudVault\'s top 50 enterprise accounts directly', impact: { marketShare: 6, brand: -8, revenue: 150 }, risk: 'medium', framework: 'AMC: LOW visibility if done quietly. Repertoire: Focused action. CloudVault response speed = 2-4 weeks, giving you a window.', category: 'tactical', exchangeValue: 'Each enterprise account worth €3-5M/year. High ROI per conversion.' },
+        { id: 'feature_parity', name: 'Feature Parity', description: 'Match CloudVault\'s security features within 90 days', impact: { marketShare: 5, brand: 8, revenue: 100 }, risk: 'medium', framework: 'Porter: Eliminates competitor differentiation advantage. ABP: Assumption = "we can match their engineering capability" — validate this.', category: 'strategic', exchangeValue: 'Removes CloudVault\'s premium justification. Moderate investment.' },
+        { id: 'vertical_focus', name: 'Vertical Focus', description: 'Dominate healthcare & finance verticals with specialized features', impact: { marketShare: 4, brand: 15, revenue: 180 }, risk: 'low', framework: 'Market Commonality: Reduces direct overlap — creates asymmetric rivalry. Scenario Planning: Builds defensible niche positions.', category: 'strategic', exchangeValue: 'Healthcare + Finance = €1.2B TAM. Premium pricing possible in verticals.' },
+        { id: 'channel_expansion', name: 'Channel Expansion', description: 'Sign 500 new reseller partners across Europe', impact: { marketShare: 7, brand: 5, revenue: 120 }, risk: 'medium', framework: 'Repertoire: Complex multi-channel action — hard to counter quickly. ABP: Shaping action — builds distribution barrier.', category: 'strategic', exchangeValue: 'Builds long-term channel advantage. +€120M through partner revenue.' },
+        { id: 'talent_raid', name: 'Talent Raid', description: 'Recruit CloudVault\'s top 20 engineers with 40% salary premium', impact: { marketShare: 2, brand: -5, revenue: -50 }, risk: 'low', framework: 'Competitive Dynamics: Degrades competitor CAPABILITY (the C in AMC). Low visibility but high long-term impact.', category: 'tactical', exchangeValue: 'Cost: €5M/year extra salary. Value: accelerates your feature roadmap.' },
+        { id: 'geographic', name: 'Geographic Expansion', description: 'Launch in 10 new countries where CloudVault is weak', impact: { marketShare: 8, brand: 10, revenue: 200 }, risk: 'medium', framework: 'Market Commonality: Reduces overlap — CloudVault less motivated to respond in new markets. ABP: Hedging — diversifies revenue sources.', category: 'strategic', exchangeValue: 'New markets = €200M incremental. CloudVault response unlikely in year 1.' }
       ]
     };
 
     const SHOCK_EVENTS = [
-      { id: 'data_breach', name: '🔓 Data Breach', description: 'A competitor suffers security breach.', impact: { blueShare: 3, redShare: -2 } },
-      { id: 'regulation', name: '📋 New Regulation', description: 'EU announces stricter data requirements.', impact: { blueShare: 2, redShare: 1 } },
-      { id: 'economic', name: '📉 Economic Downturn', description: 'Tech budget cuts across enterprises.', impact: { blueShare: -3, redShare: 2 } },
-      { id: 'new_entrant', name: '🚀 Tech Giant Enters', description: 'Major company announces offering.', impact: { blueShare: -4, redShare: -3 } },
-      { id: 'ai_breakthrough', name: '🤖 AI Breakthrough', description: 'New AI transforms expectations.', impact: { blueShare: 2, redShare: 3 } }
+      { id: 'data_breach', name: '🔓 Data Breach', description: 'A major competitor suffers a catastrophic security breach. Enterprise customers re-evaluate all vendors.', impact: { blueShare: 3, redShare: -2 }, abpNote: 'Tests assumption: "security is always valued." CloudVault benefits from premium security positioning.' },
+      { id: 'regulation', name: '📋 New EU Regulation', description: 'EU announces Digital Sovereignty Act requiring data localization. Compliance costs increase 40%.', impact: { blueShare: 2, redShare: 1 }, abpNote: 'Exogenous shock per TN02. Tests regulatory assumptions. Both players must adapt — benefits established players with compliance infrastructure.' },
+      { id: 'economic', name: '📉 Economic Downturn', description: 'Tech budget cuts of 15-20% across enterprises. CFOs demanding cost optimization.', impact: { blueShare: -3, redShare: 2 }, abpNote: 'Tests load-bearing assumption: "enterprises will pay premium for security." Economic pressure favors lower-cost alternatives.' },
+      { id: 'new_entrant', name: '🚀 Tech Giant Enters', description: 'Microsoft/Google announces major enterprise storage initiative with $2B investment.', impact: { blueShare: -4, redShare: -3 }, abpNote: 'Changes the competitive dyad entirely. Both players must re-evaluate: who is the REAL competitor? Market Commonality shifts dramatically.' },
+      { id: 'ai_breakthrough', name: '🤖 AI Breakthrough', description: 'New AI model enables automatic data classification, reducing storage costs by 60%.', impact: { blueShare: 2, redShare: 3 }, abpNote: 'Tests technology assumptions. Benefits the player who invested in innovation. Check: who played "Innovation Push" or "Feature Parity"?' }
     ];
 
     const INTEL_REPORTS = [
-      { id: 'intel_a', name: '📊 Intel A', content: 'DataStorm hired 45 new enterprise sales execs in 60 days.' },
-      { id: 'intel_b', name: '📊 Intel B', content: 'Patent filings show AI-powered data classification development.' },
-      { id: 'intel_c', name: '📊 Intel C', content: 'CloudVault leads security (4.8/5) but lags pricing perception (3.2/5).' }
+      { id: 'intel_a', name: '📊 Intel A: Sales Buildup', content: 'HUMINT Source: DataStorm hired 45 new enterprise sales executives in 60 days. Average experience: 12 years. 30% are ex-CloudVault employees.', amcInsight: 'AMC CAPABILITY indicator: DataStorm is building enterprise sales capability rapidly. The ex-CloudVault hires know your client relationships and pricing.' },
+      { id: 'intel_b', name: '📊 Intel B: Patent Activity', content: 'OSINT Source: Patent filings reveal DataStorm developing AI-powered data classification. 3 patents filed in last 90 days.', amcInsight: 'AMC CAPABILITY indicator: DataStorm is investing in differentiation, not just price competition. This suggests a multi-phase strategy.' },
+      { id: 'intel_c', name: '📊 Intel C: Market Perception', content: 'Survey Data: CloudVault leads security perception (4.8/5) but lags significantly on pricing perception (3.2/5). DataStorm: security 3.5/5, pricing 4.1/5.', amcInsight: 'VULNERABILITY: CloudVault\'s load-bearing assumption "customers value security over price" is weakening. Exchange Value calculation must account for this perception gap.' }
     ];
+
+    // ==================== MOVE INTERACTION MATRIX ====================
+    const MOVE_INTERACTIONS = {
+      'price_hold_price_attack': { blueAdj: -3, redAdj: 2, analysis: 'POOR DEFENSE: Holding price while competitor undercuts by 50% signals complacency. AMC Analysis: CloudVault demonstrated low awareness of threat severity. Customers interpret inaction as arrogance.', blueScore: 'D', redScore: 'A' },
+      'price_hold_freemium': { blueAdj: -1, redAdj: 3, analysis: 'RISKY HOLD: Freemium model creates a different market segment. CloudVault\'s premium positioning holds for enterprise, but SMB pipeline dries up. Long-term: DataStorm builds user base for upsell into enterprise.', blueScore: 'C', redScore: 'A' },
+      'price_hold_enterprise_raid': { blueAdj: -2, redAdj: 1, analysis: 'VULNERABLE: Low-visibility enterprise raid succeeds because CloudVault isn\'t actively defending accounts. AMC: CloudVault lacked AWARENESS of targeted attacks.', blueScore: 'D', redScore: 'B+' },
+      'price_match_price_attack': { blueAdj: 0, redAdj: 0, analysis: 'STALEMATE: Both compete on price, destroying margins. Neither gains sustainable advantage. Exchange Value negative for both. Classic prisoner\'s dilemma.', blueScore: 'C', redScore: 'C' },
+      'price_match_freemium': { blueAdj: -1, redAdj: 2, analysis: 'INSUFFICIENT: Price matching doesn\'t counter freemium — they\'re playing a different game. CloudVault sacrifices revenue without stopping the bleeding. Repertoire mismatch.', blueScore: 'D+', redScore: 'A-' },
+      'price_war_price_attack': { blueAdj: 1, redAdj: -2, analysis: 'MUTUAL DESTRUCTION with advantage to CloudVault (deeper pockets). ABP: Tests DataStorm\'s load-bearing assumption about financial runway. High risk for both.', blueScore: 'B-', redScore: 'D' },
+      'price_war_freemium': { blueAdj: 0, redAdj: 0, analysis: 'SCORCHED EARTH: Both destroy the market. No one wins a price war against free. ABP failure: CloudVault\'s assumption "we can outspend them" meets "free is unbeatable."', blueScore: 'F', redScore: 'D' },
+      'feature_bundle_price_attack': { blueAdj: 1, redAdj: 1, analysis: 'GOOD ASYMMETRIC RESPONSE: CloudVault differentiates while DataStorm attacks on price. Market segments naturally. Repertoire: Complex response (features) counters simple attack (price).', blueScore: 'B+', redScore: 'B' },
+      'feature_bundle_freemium': { blueAdj: 1, redAdj: 2, analysis: 'SOLID POSITIONING: CloudVault strengthens premium value while DataStorm captures a different segment. Both can win in parallel. Competitive Dynamics: Reduced direct rivalry.', blueScore: 'B+', redScore: 'A-' },
+      'feature_bundle_enterprise_raid': { blueAdj: 1, redAdj: 0, analysis: 'GOOD DEFENSE: New features give enterprise customers reasons to stay. ABP: Hedging action against churn. Enterprise raid partially blunted.', blueScore: 'B+', redScore: 'C+' },
+      'innovation_price_attack': { blueAdj: 2, redAdj: 0, analysis: 'EXCELLENT: Innovation resets the competitive game. While DataStorm competes on yesterday\'s terms (price), CloudVault moves to tomorrow\'s terms (AI features). Scenario Planning: Shaping action.', blueScore: 'A', redScore: 'C+' },
+      'innovation_freemium': { blueAdj: 2, redAdj: 2, analysis: 'WIN-WIN: Both play to their strengths. CloudVault innovates for enterprise premium, DataStorm builds volume through freemium. Market naturally segments.', blueScore: 'A', redScore: 'A' },
+      'innovation_feature_parity': { blueAdj: 2, redAdj: 1, analysis: 'RACE: CloudVault innovates while DataStorm tries to catch up. First-mover advantage is real here — DataStorm\'s parity effort arrives too late if CloudVault executes.', blueScore: 'A-', redScore: 'B' },
+      'enterprise_lock_enterprise_raid': { blueAdj: 2, redAdj: -1, analysis: 'PERFECT COUNTER: Lock-in directly neutralizes enterprise raid. ABP: CloudVault anticipated the attack vector and hedged. DataStorm\'s effort wasted on locked accounts.', blueScore: 'A', redScore: 'D' },
+      'enterprise_lock_price_attack': { blueAdj: 1, redAdj: 1, analysis: 'PARTIAL DEFENSE: Locked customers are safe but new business vulnerable to price attacks. Solid hedging action per ABP.', blueScore: 'B', redScore: 'B' },
+      'partnership_price_attack': { blueAdj: 2, redAdj: 0, analysis: 'STRONG: Partnership creates ecosystem barrier that price alone cannot overcome. Complex, multi-dimensional response per Repertoire Analysis.', blueScore: 'A-', redScore: 'C' },
+      'partnership_channel_expansion': { blueAdj: 1, redAdj: 1, analysis: 'CHANNEL WAR: Both investing in distribution. Outcome depends on partner quality and exclusivity. Competitive Dynamics: Escalation in a new dimension.', blueScore: 'B', redScore: 'B' },
+      'acquisition_price_attack': { blueAdj: 3, redAdj: -1, analysis: 'POWER MOVE: Acquisition consolidates market while DataStorm bleeds on price. ABP: CloudVault\'s assumption about "regulatory approval" is the key risk.', blueScore: 'A', redScore: 'C-' },
+      'acquisition_geographic': { blueAdj: 2, redAdj: 2, analysis: 'PARALLEL EXPANSION: Both grow through different means. Low direct conflict. Market Commonality stays moderate. Both can succeed.', blueScore: 'B+', redScore: 'B+' }
+    };
+
+    // Fallback analysis for unlisted combinations
+    const getInteraction = (blueId, redId) => {
+      const key = `${blueId}_${redId}`;
+      if (MOVE_INTERACTIONS[key]) return MOVE_INTERACTIONS[key];
+      // Generate default analysis based on categories
+      const blueOpt = STRATEGIC_OPTIONS.blue.find(o => o.id === blueId);
+      const redOpt = STRATEGIC_OPTIONS.red.find(o => o.id === redId);
+      if (!blueOpt || !redOpt) return { blueAdj: 0, redAdj: 0, analysis: 'No specific interaction data.', blueScore: 'C', redScore: 'C' };
+      const bCat = blueOpt.category;
+      const rCat = redOpt.category;
+      if (bCat === 'defensive' && rCat === 'aggressive') return { blueAdj: -2, redAdj: 2, analysis: `Defensive stance (${blueOpt.name}) struggles against aggressive attack (${redOpt.name}). AMC: CloudVault\'s passive response signals low motivation to the market. Consider more assertive counter-strategy.`, blueScore: 'D+', redScore: 'B+' };
+      if (bCat === 'strategic' && rCat === 'aggressive') return { blueAdj: 1, redAdj: 0, analysis: `Strategic response (${blueOpt.name}) effectively counters aggressive attack (${redOpt.name}). Repertoire Analysis: Complex moves are harder to counter than simple price attacks.`, blueScore: 'B+', redScore: 'C+' };
+      if (bCat === 'aggressive' && rCat === 'aggressive') return { blueAdj: 0, redAdj: 0, analysis: `Both sides chose aggressive strategies. Mutual destruction risk. Exchange Value is negative for both — neither achieves sustainable advantage. Consider de-escalation next round.`, blueScore: 'C-', redScore: 'C-' };
+      if (bCat === 'strategic' && rCat === 'strategic') return { blueAdj: 1, redAdj: 1, analysis: `Both teams played strategically. This is the optimal outcome — competition drives innovation without destructive price wars. Market grows for both players.`, blueScore: 'B+', redScore: 'B+' };
+      if (bCat === 'strategic' && rCat === 'disruptive') return { blueAdj: 0, redAdj: 2, analysis: `Disruptive move (${redOpt.name}) changes the game rules. Strategic response may not be sufficient. Consider: is your strategy addressing the OLD game or the NEW game?`, blueScore: 'C+', redScore: 'A-' };
+      return { blueAdj: 0, redAdj: 0, analysis: `${blueOpt.name} vs ${redOpt.name}: Both moves proceed in parallel. Market impact depends on execution quality and timing. Apply Exchange Value to quantify each outcome.`, blueScore: 'C+', redScore: 'C+' };
+    };
 
     // ==================== INITIAL STATE ====================
     const getInitialState = () => ({
-      gamePhase: 'setup',
-      currentRound: 1,
+      gamePhase: 'setup', currentRound: 1,
       timeRemaining: GAME_CONFIG.roundDurationMinutes * 60,
       isTimerRunning: false,
-      blueDecisions: [],
-      redDecisions: [],
-      shocksApplied: [],
-      intelReleased: [],
+      blueDecisions: [], redDecisions: [],
+      shocksApplied: [], intelReleased: [],
       marketState: { ...CASE_STUDY.marketData },
-      messages: [],
-      roundResults: [],
+      messages: [], roundResults: [],
       lastUpdate: Date.now()
     });
 
@@ -193,11 +219,11 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
       const [connectionStatus, setConnectionStatus] = useState('disconnected');
       const [notifications, setNotifications] = useState([]);
       const [inputRoomCode, setInputRoomCode] = useState('');
+      const [activeTab, setActiveTab] = useState('strategy');
       const timerRef = useRef(null);
       const dbRef = useRef(null);
-      const lastSaveRef = useRef(0); // Track our own writes to skip echo from Firebase
+      const lastSaveRef = useRef(0);
 
-      // Generate random room code
       const generateRoomCode = () => {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let code = '';
@@ -205,79 +231,47 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
         return code;
       };
 
-      // Sanitize state from Firebase (empty arrays become null in Firebase)
       const sanitizeState = (data) => {
         const defaults = getInitialState();
-        return {
-          ...defaults,
-          ...data,
-          blueDecisions: data.blueDecisions || [],
-          redDecisions: data.redDecisions || [],
-          shocksApplied: data.shocksApplied || [],
-          intelReleased: data.intelReleased || [],
-          messages: data.messages || [],
-          roundResults: data.roundResults || [],
+        return { ...defaults, ...data,
+          blueDecisions: data.blueDecisions || [], redDecisions: data.redDecisions || [],
+          shocksApplied: data.shocksApplied || [], intelReleased: data.intelReleased || [],
+          messages: data.messages || [], roundResults: data.roundResults || [],
           marketState: data.marketState || defaults.marketState
         };
       };
 
-      // Firebase sync
       useEffect(() => {
         if (!database || !roomCode) return;
-
         dbRef.current = database.ref(`wargames/${roomCode}`);
-
-        // Listen for changes from Firebase (including from other clients)
         const unsubscribe = dbRef.current.on('value', (snapshot) => {
           const data = snapshot.val();
           if (data) {
             const sanitized = sanitizeState(data);
-            setGameState(prev => {
-              // Only update if the remote data is newer than what we have
-              if (sanitized.lastUpdate >= prev.lastUpdate) {
-                return sanitized;
-              }
-              return prev;
-            });
+            setGameState(prev => sanitized.lastUpdate >= prev.lastUpdate ? sanitized : prev);
             setConnectionStatus('connected');
           }
         });
-
         setConnectionStatus('connected');
-
-        return () => {
-          dbRef.current.off('value', unsubscribe);
-        };
+        return () => { dbRef.current.off('value', unsubscribe); };
       }, [roomCode]);
 
-      // Local storage fallback sync (same browser)
       useEffect(() => {
-        if (database && roomCode) return; // Use Firebase if available
+        if (database && roomCode) return;
         if (!roomCode) return;
-
         const key = `wargame_${roomCode}`;
-
         const poll = setInterval(() => {
           const saved = localStorage.getItem(key);
-          if (saved) {
-            const data = JSON.parse(saved);
-            if (data.lastUpdate > gameState.lastUpdate) {
-              setGameState(sanitizeState(data));
-            }
-          }
+          if (saved) { const data = JSON.parse(saved); if (data.lastUpdate > gameState.lastUpdate) setGameState(sanitizeState(data)); }
         }, 500);
-
         setConnectionStatus('local');
         return () => clearInterval(poll);
       }, [roomCode, gameState.lastUpdate]);
 
-      // Timer (Control only)
       useEffect(() => {
         if (currentTeam !== 'control' || !gameState.isTimerRunning || gameState.timeRemaining <= 0) {
-          if (timerRef.current) clearInterval(timerRef.current);
-          return;
+          if (timerRef.current) clearInterval(timerRef.current); return;
         }
-
         timerRef.current = setInterval(() => {
           setGameState(prev => {
             const newTime = prev.timeRemaining - 1;
@@ -287,21 +281,18 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
             return newState;
           });
         }, 1000);
-
         return () => clearInterval(timerRef.current);
       }, [currentTeam, gameState.isTimerRunning, gameState.gamePhase]);
 
       const saveState = (state) => {
         const now = Date.now();
         const toSave = { ...state, lastUpdate: now };
-        lastSaveRef.current = now; // Mark this as our own write
-
+        lastSaveRef.current = now;
         if (database && roomCode && dbRef.current) {
           dbRef.current.set(toSave).catch(err => {
             console.error('Firebase save error:', err);
-            // Fallback to localStorage if Firebase write fails (e.g. rules expired)
             localStorage.setItem(`wargame_${roomCode}`, JSON.stringify(toSave));
-            addNotification('⚠️ Cloud sync failed, using local', 'warning');
+            addNotification('Cloud sync failed, using local', 'warning');
           });
         } else if (roomCode) {
           localStorage.setItem(`wargame_${roomCode}`, JSON.stringify(toSave));
@@ -325,50 +316,32 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
         setRoomCode(code);
         const initial = getInitialState();
         setGameState(initial);
-        
-        if (database) {
-          database.ref(`wargames/${code}`).set(initial);
-        } else {
-          localStorage.setItem(`wargame_${code}`, JSON.stringify(initial));
-        }
-        
+        if (database) database.ref(`wargames/${code}`).set(initial);
+        else localStorage.setItem(`wargame_${code}`, JSON.stringify(initial));
         addNotification(`Room created: ${code}`, 'success');
       };
 
       const joinRoom = () => {
         if (inputRoomCode.length >= 4) {
-          const code = inputRoomCode.toUpperCase();
-          setRoomCode(code);
-          addNotification(`Joined room: ${code}`, 'success');
+          setRoomCode(inputRoomCode.toUpperCase());
+          addNotification(`Joined room: ${inputRoomCode.toUpperCase()}`, 'success');
         }
       };
 
-      const selectTeam = (team) => {
-        setCurrentTeam(team);
-        // Don't change shared gamePhase here - just set local team
-        // Control team will advance the phase
-      };
+      const selectTeam = (team) => { setCurrentTeam(team); };
 
       const startGame = () => {
-        const newState = { 
-          ...gameState,
-          gamePhase: 'playing', 
-          isTimerRunning: true, 
-          timeRemaining: GAME_CONFIG.roundDurationMinutes * 60,
-          lastUpdate: Date.now()
-        };
+        const newState = { ...gameState, gamePhase: 'playing', isTimerRunning: true, timeRemaining: GAME_CONFIG.roundDurationMinutes * 60, lastUpdate: Date.now() };
         setGameState(newState);
         saveState(newState);
-        addNotification('🚀 Game started!', 'success');
+        addNotification('Game started!', 'success');
       };
 
       const submitDecision = (decision) => {
         const key = currentTeam === 'blue' ? 'blueDecisions' : 'redDecisions';
         const existing = (gameState[key] || []).filter(d => d.round !== gameState.currentRound);
-        updateState({
-          [key]: [...existing, { ...decision, round: gameState.currentRound, timestamp: Date.now() }]
-        });
-        addNotification(`✅ ${decision.name} submitted!`, 'success');
+        updateState({ [key]: [...existing, { ...decision, round: gameState.currentRound, timestamp: Date.now() }] });
+        addNotification(`${decision.name} submitted!`, 'success');
       };
 
       const applyShock = (shock) => {
@@ -376,7 +349,7 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
           shocksApplied: [...(gameState.shocksApplied || []), { ...shock, round: gameState.currentRound }],
           messages: [...(gameState.messages || []), { type: 'shock', content: shock.name, detail: shock.description, round: gameState.currentRound }]
         });
-        addNotification(`🌩️ Shock applied!`, 'warning');
+        addNotification('Shock applied!', 'warning');
       };
 
       const releaseIntel = (intel) => {
@@ -384,146 +357,78 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
           intelReleased: [...(gameState.intelReleased || []), { ...intel, round: gameState.currentRound }],
           messages: [...(gameState.messages || []), { type: 'intel', content: intel.name, detail: intel.content, round: gameState.currentRound }]
         });
-        addNotification(`📊 Intel released!`, 'info');
+        addNotification('Intel released!', 'info');
       };
 
       const advanceRound = () => {
         const blue = (gameState.blueDecisions || []).find(d => d.round === gameState.currentRound);
         const red = (gameState.redDecisions || []).find(d => d.round === gameState.currentRound);
         const shocks = (gameState.shocksApplied || []).filter(s => s.round === gameState.currentRound);
-
-        let change = { blue: 0, red: 0 };
-        if (blue) change.blue += blue.impact?.marketShare || 0;
-        if (red) change.red += red.impact?.marketShare || 0;
-        shocks.forEach(s => {
-          change.blue += s.impact?.blueShare || 0;
-          change.red += s.impact?.redShare || 0;
-        });
-
+        const interaction = (blue && red) ? getInteraction(blue.id, red.id) : { blueAdj: 0, redAdj: 0 };
+        let change = { blue: interaction.blueAdj, red: interaction.redAdj };
+        if (blue) change.blue += (blue.impact?.marketShare || 0);
+        if (red) change.red += (red.impact?.marketShare || 0);
+        shocks.forEach(s => { change.blue += s.impact?.blueShare || 0; change.red += s.impact?.redShare || 0; });
         const newMarket = {
           ...gameState.marketState,
-          cloudVaultShare: Math.max(20, Math.min(60, gameState.marketState.cloudVaultShare + change.blue)),
-          dataStormShare: Math.max(10, Math.min(40, gameState.marketState.dataStormShare + change.red))
+          cloudVaultShare: Math.max(15, Math.min(65, gameState.marketState.cloudVaultShare + change.blue)),
+          dataStormShare: Math.max(5, Math.min(45, gameState.marketState.dataStormShare + change.red))
         };
-        newMarket.othersShare = 100 - newMarket.cloudVaultShare - newMarket.dataStormShare;
-
+        newMarket.othersShare = Math.max(10, 100 - newMarket.cloudVaultShare - newMarket.dataStormShare);
         const result = {
           round: gameState.currentRound,
-          blueDecision: blue?.name || 'No action',
-          redDecision: red?.name || 'No action',
-          shocks: shocks.map(s => s.name),
-          finalShares: newMarket
+          blueMove: blue || null, redMove: red || null,
+          blueDecision: blue?.name || 'No action', redDecision: red?.name || 'No action',
+          interaction: (blue && red) ? interaction : null,
+          shocks: shocks.map(s => s.name), finalShares: { ...newMarket }
         };
-
         if (gameState.currentRound < GAME_CONFIG.totalRounds) {
-          updateState({
-            currentRound: gameState.currentRound + 1,
-            timeRemaining: GAME_CONFIG.roundDurationMinutes * 60,
-            isTimerRunning: false,
-            marketState: newMarket,
-            roundResults: [...(gameState.roundResults || []), result]
-          });
-          addNotification(`Round ${gameState.currentRound + 1} starting!`, 'info');
+          updateState({ currentRound: gameState.currentRound + 1, timeRemaining: GAME_CONFIG.roundDurationMinutes * 60, isTimerRunning: false, marketState: newMarket, roundResults: [...(gameState.roundResults || []), result] });
         } else {
-          updateState({
-            gamePhase: 'debrief',
-            isTimerRunning: false,
-            marketState: newMarket,
-            roundResults: [...(gameState.roundResults || []), result]
-          });
+          updateState({ gamePhase: 'debrief', isTimerRunning: false, marketState: newMarket, roundResults: [...(gameState.roundResults || []), result] });
         }
       };
 
-      const resetGame = () => {
-        const fresh = getInitialState();
-        setGameState(fresh);
-        saveState(fresh);
-        setCurrentTeam(null);
-      };
-
+      const resetGame = () => { const fresh = getInitialState(); setGameState(fresh); saveState(fresh); setCurrentTeam(null); };
       const formatTime = (s) => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
 
       // ==================== SCREENS ====================
-
-      // Setup Screen - Room Creation/Join
       const SetupScreen = () => (
         <div className="min-h-screen flex items-center justify-center p-6">
           <div className="max-w-md w-full">
             <div className="text-center mb-10">
-              <h1 className="text-4xl font-bold text-white mb-3">⚔️ CI War Game</h1>
+              <h1 className="text-4xl font-bold text-white mb-3">CI War Game</h1>
               <p className="text-slate-400">{CASE_STUDY.title}</p>
-              
-              {!isFirebaseConfigured && (
-                <div className="mt-4 bg-amber-500/20 border border-amber-500/50 rounded-lg p-4 text-left">
-                  <p className="text-amber-300 text-sm font-semibold mb-2">⚠️ Firebase not configured</p>
-                  <p className="text-amber-200/80 text-xs">Sync will only work in same browser. To enable cross-computer sync, configure Firebase in the HTML file.</p>
-                </div>
-              )}
-              
-              {isFirebaseConfigured && (
-                <div className="mt-4 bg-green-500/20 border border-green-500/50 rounded-lg p-3">
-                  <p className="text-green-300 text-sm">✅ Firebase connected - Cross-computer sync enabled!</p>
-                </div>
-              )}
+              <p className="text-slate-500 text-xs mt-2">Integrating: AMC Framework | Competitive Repertoire | Exchange Value | Scenario Planning | ABP</p>
+              {isFirebaseConfigured && <div className="mt-4 bg-green-500/20 border border-green-500/50 rounded-lg p-3"><p className="text-green-300 text-sm">Firebase connected — Cross-computer sync enabled</p></div>}
+              {!isFirebaseConfigured && <div className="mt-4 bg-amber-500/20 border border-amber-500/50 rounded-lg p-4 text-left"><p className="text-amber-300 text-sm font-semibold mb-1">Firebase not configured</p><p className="text-amber-200/80 text-xs">Sync only works in same browser.</p></div>}
             </div>
-
             <div className="bg-slate-800 rounded-xl p-6 mb-6">
               <h2 className="text-white font-bold text-lg mb-4">Create New Game</h2>
-              <button
-                onClick={createRoom}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-500 hover:to-purple-500"
-              >
-                🎮 Create Room
-              </button>
+              <button onClick={createRoom} className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-4 rounded-xl font-bold text-lg hover:from-blue-500 hover:to-purple-500">Create Room</button>
             </div>
-
             <div className="bg-slate-800 rounded-xl p-6">
               <h2 className="text-white font-bold text-lg mb-4">Join Existing Game</h2>
               <div className="flex gap-3">
-                <input
-                  type="text"
-                  value={inputRoomCode}
-                  onChange={(e) => setInputRoomCode(e.target.value.toUpperCase())}
-                  placeholder="Enter room code"
-                  maxLength={6}
-                  className="flex-1 bg-slate-700 text-white px-4 py-3 rounded-xl text-center text-xl font-mono tracking-widest uppercase"
-                />
-                <button
-                  onClick={joinRoom}
-                  disabled={inputRoomCode.length < 4}
-                  className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-500 disabled:opacity-50"
-                >
-                  Join
-                </button>
+                <input type="text" value={inputRoomCode} onChange={(e) => setInputRoomCode(e.target.value.toUpperCase())} placeholder="Room code" maxLength={6} className="flex-1 bg-slate-700 text-white px-4 py-3 rounded-xl text-center text-xl font-mono tracking-widest uppercase" />
+                <button onClick={joinRoom} disabled={inputRoomCode.length < 4} className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-500 disabled:opacity-50">Join</button>
               </div>
             </div>
           </div>
         </div>
       );
 
-      // Team Selection
       const TeamSelectionScreen = () => (
         <div className="min-h-screen flex items-center justify-center p-6">
           <div className="max-w-2xl w-full">
             <div className="text-center mb-8">
-              <div className="inline-block bg-purple-500/20 text-purple-300 px-4 py-2 rounded-lg text-2xl font-mono mb-4">
-                Room: {roomCode}
-              </div>
+              <div className="inline-block bg-purple-500/20 text-purple-300 px-4 py-2 rounded-lg text-2xl font-mono mb-4">Room: {roomCode}</div>
               <h2 className="text-2xl font-bold text-white">Select Your Team</h2>
               <p className="text-slate-400 text-sm mt-2">Share the room code with other players</p>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               {Object.entries(GAME_CONFIG.teams).map(([key, team]) => (
-                <button
-                  key={key}
-                  onClick={() => selectTeam(key)}
-                  className={`p-6 rounded-xl border-2 transition-all hover:scale-105 ${
-                    key === 'blue' ? 'bg-blue-900/30 border-blue-500/50 hover:border-blue-400' :
-                    key === 'red' ? 'bg-red-900/30 border-red-500/50 hover:border-red-400' :
-                    'bg-purple-900/30 border-purple-500/50 hover:border-purple-400'
-                  }`}
-                >
+                <button key={key} onClick={() => selectTeam(key)} className={`p-6 rounded-xl border-2 transition-all hover:scale-105 ${key === 'blue' ? 'bg-blue-900/30 border-blue-500/50 hover:border-blue-400' : key === 'red' ? 'bg-red-900/30 border-red-500/50 hover:border-red-400' : 'bg-purple-900/30 border-purple-500/50 hover:border-purple-400'}`}>
                   <div className="text-4xl mb-3">{team.icon}</div>
                   <h3 className="text-white font-bold">{team.name}</h3>
                   <p className="text-slate-400 text-sm">{team.role}</p>
@@ -534,7 +439,6 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
         </div>
       );
 
-      // Briefing Screen
       const BriefingScreen = () => (
         <div className="min-h-screen p-6">
           <div className="max-w-3xl mx-auto">
@@ -543,183 +447,171 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
                 <h2 className="text-2xl font-bold text-white">{CASE_STUDY.title}</h2>
                 <span className="bg-purple-500/20 text-purple-300 px-3 py-1 rounded-lg font-mono">{roomCode}</span>
               </div>
-              
-              <div className="bg-slate-900 rounded-lg p-4 mb-4">
-                <p className="text-slate-300 text-sm whitespace-pre-line">{CASE_STUDY.background}</p>
-              </div>
-
+              <div className="bg-slate-900 rounded-lg p-4 mb-4"><p className="text-slate-300 text-sm whitespace-pre-line">{CASE_STUDY.background}</p></div>
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-blue-500/20 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-blue-400">{gameState.marketState.cloudVaultShare}%</div>
-                  <div className="text-xs text-slate-400">CloudVault</div>
-                </div>
-                <div className="bg-red-500/20 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-red-400">{gameState.marketState.dataStormShare}%</div>
-                  <div className="text-xs text-slate-400">DataStorm</div>
-                </div>
-                <div className="bg-slate-700 rounded-lg p-3 text-center">
-                  <div className="text-xl font-bold text-slate-300">4</div>
-                  <div className="text-xs text-slate-400">Rounds</div>
-                </div>
+                <div className="bg-blue-500/20 rounded-lg p-3 text-center"><div className="text-xl font-bold text-blue-400">{gameState.marketState.cloudVaultShare}%</div><div className="text-xs text-slate-400">CloudVault</div></div>
+                <div className="bg-red-500/20 rounded-lg p-3 text-center"><div className="text-xl font-bold text-red-400">{gameState.marketState.dataStormShare}%</div><div className="text-xs text-slate-400">DataStorm</div></div>
+                <div className="bg-slate-700 rounded-lg p-3 text-center"><div className="text-xl font-bold text-slate-300">4</div><div className="text-xs text-slate-400">Rounds</div></div>
               </div>
             </div>
-
-            <div className={`rounded-xl p-5 mb-6 border ${
-              currentTeam === 'blue' ? 'bg-blue-900/20 border-blue-500/30' :
-              currentTeam === 'red' ? 'bg-red-900/20 border-red-500/30' :
-              'bg-purple-900/20 border-purple-500/30'
-            }`}>
-              <h3 className="text-white font-bold mb-2">🎯 Your Role: {GAME_CONFIG.teams[currentTeam].name}</h3>
-              <p className="text-slate-300 text-sm">
-                {currentTeam === 'blue' && 'Defend your market position against DataStorm.'}
-                {currentTeam === 'red' && 'Disrupt CloudVault and capture market share.'}
-                {currentTeam === 'control' && 'Facilitate: release intel, trigger shocks, manage time.'}
-              </p>
+            <div className={`rounded-xl p-5 mb-6 border ${currentTeam === 'blue' ? 'bg-blue-900/20 border-blue-500/30' : currentTeam === 'red' ? 'bg-red-900/20 border-red-500/30' : 'bg-purple-900/20 border-purple-500/30'}`}>
+              <h3 className="text-white font-bold mb-2">Your Role: {GAME_CONFIG.teams[currentTeam].name}</h3>
+              <p className="text-slate-300 text-sm">{currentTeam === 'blue' && 'Defend your market position. Use AMC Framework to anticipate attacks, Exchange Value to evaluate responses, and ABP to identify your load-bearing assumptions.'}{currentTeam === 'red' && 'Disrupt CloudVault. Use Competitive Repertoire Analysis to exploit their patterns, Move Visibility to control information, and Scenario Planning to sustain gains.'}{currentTeam === 'control' && 'Facilitate: release intel to test teams\' analytical skills, trigger shocks to test assumption robustness, manage pacing.'}</p>
             </div>
-
-            <div className="text-center">
-              {currentTeam === 'control' ? (
-                <button onClick={startGame} className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-4 rounded-xl font-bold text-lg animate-pulse">
-                  🚀 START GAME
-                </button>
-              ) : (
-                <div className="bg-slate-700 text-slate-300 px-6 py-4 rounded-xl inline-flex items-center gap-3">
-                  <div className="w-3 h-3 bg-amber-500 rounded-full pulse"></div>
-                  Waiting for Control Team to start...
-                </div>
-              )}
-            </div>
+            <div className="text-center">{currentTeam === 'control' ? (
+              <button onClick={startGame} className="bg-gradient-to-r from-green-600 to-emerald-600 text-white px-8 py-4 rounded-xl font-bold text-lg animate-pulse">START GAME</button>
+            ) : (
+              <div className="bg-slate-700 text-slate-300 px-6 py-4 rounded-xl inline-flex items-center gap-3"><div className="w-3 h-3 bg-amber-500 rounded-full pulse"></div>Waiting for Control Team to start...</div>
+            )}</div>
           </div>
         </div>
       );
 
-      // Game Screen
+      // ==================== GAME SCREEN ====================
       const GameScreen = () => {
         const team = GAME_CONFIG.teams[currentTeam];
         const round = CASE_STUDY.rounds[gameState.currentRound - 1];
         const options = STRATEGIC_OPTIONS[currentTeam] || [];
         const blueDecisions = gameState.blueDecisions || [];
         const redDecisions = gameState.redDecisions || [];
-        const myDecision = currentTeam === 'blue'
-          ? blueDecisions.find(d => d.round === gameState.currentRound)
-          : currentTeam === 'red'
-          ? redDecisions.find(d => d.round === gameState.currentRound)
-          : null;
+        const myDecision = currentTeam === 'blue' ? blueDecisions.find(d => d.round === gameState.currentRound) : currentTeam === 'red' ? redDecisions.find(d => d.round === gameState.currentRound) : null;
+        const guidance = currentTeam === 'blue' ? round.blueGuidance : currentTeam === 'red' ? round.redGuidance : round.controlGuidance;
 
         return (
           <div className="min-h-screen bg-slate-900">
             {/* Header */}
-            <div className={`p-3 sticky top-0 z-40 shadow-lg ${
-              currentTeam === 'blue' ? 'bg-blue-900' : currentTeam === 'red' ? 'bg-red-900' : 'bg-purple-900'
-            }`}>
-              <div className="max-w-6xl mx-auto flex items-center justify-between">
+            <div className={`p-3 sticky top-0 z-40 shadow-lg ${currentTeam === 'blue' ? 'bg-blue-900' : currentTeam === 'red' ? 'bg-red-900' : 'bg-purple-900'}`}>
+              <div className="max-w-7xl mx-auto flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">{team.icon}</span>
                   <div>
                     <div className="text-white font-bold text-sm">{team.name}</div>
-                    <div className="text-slate-300 text-xs">Round {gameState.currentRound}/4 • {round.name}</div>
+                    <div className="text-slate-300 text-xs">Round {gameState.currentRound}/4 — {round.name}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <span className="bg-slate-800 px-3 py-1 rounded-lg text-slate-300 text-sm font-mono">{roomCode}</span>
-                  <div className={`text-2xl font-mono font-bold ${gameState.timeRemaining < 60 ? 'text-red-400 animate-pulse' : 'text-white'}`}>
-                    {formatTime(gameState.timeRemaining)}
-                  </div>
+                  <div className={`text-2xl font-mono font-bold ${gameState.timeRemaining < 60 ? 'text-red-400 animate-pulse' : 'text-white'}`}>{formatTime(gameState.timeRemaining)}</div>
                   {currentTeam === 'control' && (
                     <div className="flex gap-2">
-                      <button onClick={() => updateState({ isTimerRunning: !gameState.isTimerRunning })} className={`px-3 py-1 rounded-lg text-sm font-semibold ${gameState.isTimerRunning ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>
-                        {gameState.isTimerRunning ? '⏸️' : '▶️'}
-                      </button>
-                      <button onClick={advanceRound} className="bg-purple-500 text-white px-3 py-1 rounded-lg text-sm font-semibold">
-                        ⏭️ Next
-                      </button>
+                      <button onClick={() => updateState({ isTimerRunning: !gameState.isTimerRunning })} className={`px-3 py-1 rounded-lg text-sm font-semibold ${gameState.isTimerRunning ? 'bg-yellow-500 text-black' : 'bg-green-500 text-white'}`}>{gameState.isTimerRunning ? 'PAUSE' : 'PLAY'}</button>
+                      <button onClick={advanceRound} className="bg-purple-500 text-white px-3 py-1 rounded-lg text-sm font-semibold">NEXT</button>
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            <div className="max-w-6xl mx-auto p-4">
+            <div className="max-w-7xl mx-auto p-4">
+              {/* Tabs for Blue/Red teams */}
+              {(currentTeam === 'blue' || currentTeam === 'red') && (
+                <div className="flex gap-4 mb-4 border-b border-slate-700 pb-0">
+                  <button onClick={() => setActiveTab('strategy')} className={`pb-2 px-1 text-sm font-semibold ${activeTab === 'strategy' ? 'tab-active' : 'tab-inactive'}`}>Strategy Selection</button>
+                  <button onClick={() => setActiveTab('framework')} className={`pb-2 px-1 text-sm font-semibold ${activeTab === 'framework' ? 'tab-active' : 'tab-inactive'}`}>Framework Guidance</button>
+                  <button onClick={() => setActiveTab('analysis')} className={`pb-2 px-1 text-sm font-semibold ${activeTab === 'analysis' ? 'tab-active' : 'tab-inactive'}`}>Market Analysis</button>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                {/* Left: Market & Intel */}
+                {/* Left Sidebar */}
                 <div className="space-y-4">
+                  {/* Market Position */}
                   <div className="bg-slate-800 rounded-xl p-4">
-                    <h3 className="text-white font-bold mb-3 text-sm">📊 Market</h3>
-                    <div className="space-y-2">
+                    <h3 className="text-white font-bold mb-3 text-sm">Market Position</h3>
+                    <div className="space-y-3">
                       <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-blue-400">CloudVault</span>
-                          <span className="text-white font-bold">{gameState.marketState.cloudVaultShare}%</span>
-                        </div>
-                        <div className="h-2 bg-slate-700 rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{width:`${gameState.marketState.cloudVaultShare}%`}}></div></div>
+                        <div className="flex justify-between text-xs mb-1"><span className="text-blue-400">CloudVault</span><span className="text-white font-bold">{gameState.marketState.cloudVaultShare}%</span></div>
+                        <div className="h-3 bg-slate-700 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-blue-600 to-blue-400 rounded-full transition-all duration-500" style={{width:`${gameState.marketState.cloudVaultShare}%`}}></div></div>
+                        <div className="text-xs text-slate-500 mt-0.5">Revenue: ~€{(gameState.marketState.cloudVaultShare / 100 * 5.2).toFixed(1)}B</div>
                       </div>
                       <div>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-red-400">DataStorm</span>
-                          <span className="text-white font-bold">{gameState.marketState.dataStormShare}%</span>
-                        </div>
-                        <div className="h-2 bg-slate-700 rounded-full"><div className="h-full bg-red-500 rounded-full" style={{width:`${gameState.marketState.dataStormShare}%`}}></div></div>
+                        <div className="flex justify-between text-xs mb-1"><span className="text-red-400">DataStorm</span><span className="text-white font-bold">{gameState.marketState.dataStormShare}%</span></div>
+                        <div className="h-3 bg-slate-700 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-red-600 to-red-400 rounded-full transition-all duration-500" style={{width:`${gameState.marketState.dataStormShare}%`}}></div></div>
+                        <div className="text-xs text-slate-500 mt-0.5">Revenue: ~€{(gameState.marketState.dataStormShare / 100 * 5.2).toFixed(1)}B</div>
                       </div>
+                      <div>
+                        <div className="flex justify-between text-xs mb-1"><span className="text-slate-400">Others</span><span className="text-slate-300">{gameState.marketState.othersShare}%</span></div>
+                        <div className="h-3 bg-slate-700 rounded-full overflow-hidden"><div className="h-full bg-slate-500 rounded-full" style={{width:`${gameState.marketState.othersShare}%`}}></div></div>
+                      </div>
+                    </div>
+                    <div className="mt-3 pt-3 border-t border-slate-700">
+                      <div className="text-xs text-slate-400">Total Market: €{CASE_STUDY.marketData.totalMarket}B</div>
                     </div>
                   </div>
 
+                  {/* Intel Feed */}
                   <div className="bg-slate-800 rounded-xl p-4">
-                    <h3 className="text-white font-bold mb-3 text-sm">📡 Intel Feed</h3>
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                    <h3 className="text-white font-bold mb-3 text-sm">Intel Feed</h3>
+                    <div className="space-y-2 max-h-64 overflow-y-auto">
                       {(gameState.messages || []).length === 0 ? (
-                        <p className="text-slate-500 text-xs italic">No intel yet...</p>
+                        <p className="text-slate-500 text-xs italic">No intel yet — Control will release intelligence during the game...</p>
                       ) : (gameState.messages || []).slice().reverse().map((m, i) => (
-                        <div key={i} className={`p-2 rounded-lg text-xs ${m.type === 'shock' ? 'bg-amber-500/20' : 'bg-blue-500/20'}`}>
-                          <div className="font-semibold text-white">{m.content}</div>
+                        <div key={i} className={`p-2 rounded-lg text-xs ${m.type === 'shock' ? 'bg-amber-500/20 border border-amber-500/30' : 'bg-cyan-500/10 border border-cyan-500/20'}`}>
+                          <div className="font-semibold text-white">R{m.round} — {m.content}</div>
                           <div className="text-slate-300 mt-1">{m.detail}</div>
                         </div>
                       ))}
                     </div>
                   </div>
 
+                  {/* Round Decisions */}
                   <div className="bg-slate-800 rounded-xl p-4">
-                    <h3 className="text-white font-bold mb-3 text-sm">📋 Decisions</h3>
+                    <h3 className="text-white font-bold mb-3 text-sm">Round Decisions</h3>
                     <div className="space-y-2">
                       <div className={`p-2 rounded-lg text-sm ${blueDecisions.find(d => d.round === gameState.currentRound) ? 'bg-blue-500/20' : 'bg-slate-700'}`}>
                         <span className="text-slate-400 text-xs">CloudVault:</span>
-                        <span className="text-white ml-2">{blueDecisions.find(d => d.round === gameState.currentRound)?.name || '⏳'}</span>
+                        <span className="text-white ml-2">{blueDecisions.find(d => d.round === gameState.currentRound)?.name || 'Deciding...'}</span>
                       </div>
                       <div className={`p-2 rounded-lg text-sm ${redDecisions.find(d => d.round === gameState.currentRound) ? 'bg-red-500/20' : 'bg-slate-700'}`}>
                         <span className="text-slate-400 text-xs">DataStorm:</span>
-                        <span className="text-white ml-2">{redDecisions.find(d => d.round === gameState.currentRound)?.name || '⏳'}</span>
+                        <span className="text-white ml-2">{redDecisions.find(d => d.round === gameState.currentRound)?.name || 'Deciding...'}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Right: Actions */}
+                {/* Main Content Area */}
                 <div className="lg:col-span-2 space-y-4">
+                  {/* Round Context */}
                   <div className="bg-slate-800 rounded-xl p-4">
-                    <h3 className="text-white font-bold mb-2">📍 {round.name}</h3>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="bg-indigo-500/20 text-indigo-300 text-xs px-2 py-0.5 rounded font-mono">{round.framework}</span>
+                      <h3 className="text-white font-bold">{round.name}</h3>
+                    </div>
                     <p className="text-slate-300 text-sm">{round.scenario}</p>
                     <div className="mt-2 bg-slate-700 text-slate-200 px-3 py-2 rounded-lg text-sm">
-                      <strong>Objective:</strong> {currentTeam === 'blue' ? round.blueObjective : currentTeam === 'red' ? round.redObjective : 'Facilitate the game'}
+                      <strong>Objective:</strong> {currentTeam === 'blue' ? round.blueObjective : currentTeam === 'red' ? round.redObjective : 'Facilitate the game, release intel, trigger shocks'}
                     </div>
                   </div>
 
                   {/* Control Panel */}
                   {currentTeam === 'control' && (
-                    <div className="bg-purple-900/30 rounded-xl p-4 border border-purple-500/30">
-                      <h3 className="text-purple-300 font-bold mb-3 text-sm">🎛️ Control Panel</h3>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <h4 className="text-white text-xs font-semibold mb-2">Release Intel</h4>
-                          <div className="space-y-1">
+                    <div className="space-y-4">
+                      <div className="bg-purple-900/30 rounded-xl p-4 border border-purple-500/30">
+                        <h3 className="text-purple-300 font-bold mb-2 text-sm">Facilitator Guidance</h3>
+                        <p className="text-slate-300 text-xs whitespace-pre-line">{round.controlGuidance}</p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-slate-800 rounded-xl p-4">
+                          <h4 className="text-white text-sm font-semibold mb-3">Release Intel</h4>
+                          <div className="space-y-2">
                             {INTEL_REPORTS.filter(i => !(gameState.intelReleased || []).find(r => r.id === i.id)).map(intel => (
-                              <button key={intel.id} onClick={() => releaseIntel(intel)} className="w-full text-left p-2 bg-slate-700 hover:bg-slate-600 rounded text-xs text-slate-300">{intel.name}</button>
+                              <button key={intel.id} onClick={() => releaseIntel(intel)} className="w-full text-left p-3 bg-slate-700 hover:bg-slate-600 rounded-lg">
+                                <div className="text-white text-sm font-semibold">{intel.name}</div>
+                                <div className="text-slate-400 text-xs mt-1">{intel.content.substring(0, 60)}...</div>
+                              </button>
                             ))}
+                            {INTEL_REPORTS.filter(i => !(gameState.intelReleased || []).find(r => r.id === i.id)).length === 0 && <p className="text-slate-500 text-xs">All intel released</p>}
                           </div>
                         </div>
-                        <div>
-                          <h4 className="text-white text-xs font-semibold mb-2">Trigger Shock</h4>
-                          <div className="space-y-1">
+                        <div className="bg-slate-800 rounded-xl p-4">
+                          <h4 className="text-white text-sm font-semibold mb-3">Trigger Shock (Exogenous Events)</h4>
+                          <div className="space-y-2">
                             {SHOCK_EVENTS.map(shock => (
-                              <button key={shock.id} onClick={() => applyShock(shock)} className="w-full text-left p-2 bg-amber-500/20 hover:bg-amber-500/30 rounded text-xs text-amber-200">{shock.name}</button>
+                              <button key={shock.id} onClick={() => applyShock(shock)} className="w-full text-left p-3 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg border border-amber-500/20">
+                                <div className="text-amber-200 text-sm font-semibold">{shock.name}</div>
+                                <div className="text-amber-200/60 text-xs mt-1">{shock.abpNote}</div>
+                              </button>
                             ))}
                           </div>
                         </div>
@@ -727,36 +619,188 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
                     </div>
                   )}
 
-                  {/* Strategy Selection */}
-                  {(currentTeam === 'blue' || currentTeam === 'red') && (
+                  {/* STRATEGY TAB */}
+                  {(currentTeam === 'blue' || currentTeam === 'red') && activeTab === 'strategy' && (
                     <div className="bg-slate-800 rounded-xl p-4">
-                      <h3 className="text-white font-bold mb-3 text-sm">
-                        ⚔️ Select Strategy {myDecision && <span className="text-green-400">✓</span>}
-                      </h3>
-                      <div className="grid grid-cols-2 gap-2">
+                      <h3 className="text-white font-bold mb-3 text-sm">Select Strategy {myDecision && <span className="text-green-400 ml-2">Submitted</span>}</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {options.map(opt => (
-                          <button
-                            key={opt.id}
-                            onClick={() => submitDecision(opt)}
-                            className={`text-left p-3 rounded-lg border transition-all ${
-                              myDecision?.id === opt.id 
-                                ? (currentTeam === 'blue' ? 'bg-blue-500/30 border-blue-500' : 'bg-red-500/30 border-red-500')
-                                : 'bg-slate-700 border-slate-600 hover:border-slate-400'
-                            }`}
-                          >
-                            <div className="flex justify-between items-start">
+                          <button key={opt.id} onClick={() => submitDecision(opt)} className={`text-left p-4 rounded-lg border transition-all ${myDecision?.id === opt.id ? (currentTeam === 'blue' ? 'bg-blue-500/30 border-blue-500 ring-1 ring-blue-400' : 'bg-red-500/30 border-red-500 ring-1 ring-red-400') : 'bg-slate-700 border-slate-600 hover:border-slate-400'}`}>
+                            <div className="flex justify-between items-start mb-1">
                               <span className="text-white font-semibold text-sm">{opt.name}</span>
-                              <span className={`text-xs px-1.5 py-0.5 rounded ${
-                                opt.risk === 'high' ? 'bg-red-500/30 text-red-300' :
-                                opt.risk === 'medium' ? 'bg-amber-500/30 text-amber-300' :
-                                'bg-green-500/30 text-green-300'
-                              }`}>{opt.risk}</span>
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${opt.risk === 'high' ? 'bg-red-500/30 text-red-300' : opt.risk === 'medium' ? 'bg-amber-500/30 text-amber-300' : 'bg-green-500/30 text-green-300'}`}>{opt.risk}</span>
                             </div>
-                            <p className="text-slate-400 text-xs mt-1">{opt.description}</p>
-                            {myDecision?.id === opt.id && <div className="text-green-400 text-xs mt-1 font-semibold">✓ SELECTED</div>}
+                            <p className="text-slate-400 text-xs">{opt.description}</p>
+                            <div className="mt-2 pt-2 border-t border-slate-600">
+                              <p className="text-indigo-300 text-xs">{opt.exchangeValue}</p>
+                            </div>
+                            <div className="mt-1 flex gap-2 text-xs">
+                              <span className="text-blue-400">Share: {opt.impact.marketShare > 0 ? '+' : ''}{opt.impact.marketShare}%</span>
+                              <span className="text-purple-400">Brand: {opt.impact.brand > 0 ? '+' : ''}{opt.impact.brand}</span>
+                            </div>
+                            {myDecision?.id === opt.id && <div className="text-green-400 text-xs mt-2 font-semibold">SELECTED</div>}
                           </button>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {/* FRAMEWORK TAB */}
+                  {(currentTeam === 'blue' || currentTeam === 'red') && activeTab === 'framework' && (
+                    <div className="space-y-4">
+                      <div className="bg-indigo-900/20 rounded-xl p-5 border border-indigo-500/30">
+                        <h3 className="text-indigo-300 font-bold mb-1 text-sm">{round.frameworkTitle}</h3>
+                        <p className="text-slate-300 text-sm whitespace-pre-line leading-relaxed">{guidance}</p>
+                      </div>
+
+                      {/* AMC Quick Reference */}
+                      {round.framework === 'AMC' && (
+                        <div className="bg-slate-800 rounded-xl p-4">
+                          <h4 className="text-white font-bold text-sm mb-3">AMC Analysis — DataStorm vs CloudVault</h4>
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/20">
+                              <div className="text-green-400 font-bold text-xs mb-1">A — AWARENESS</div>
+                              <div className="text-2xl font-bold text-green-400 mb-1">HIGH</div>
+                              <div className="text-slate-400 text-xs">"Project Thunder" publicly announced. Market is watching.</div>
+                            </div>
+                            <div className="bg-red-500/10 rounded-lg p-3 border border-red-500/20">
+                              <div className="text-red-400 font-bold text-xs mb-1">M — MOTIVATION</div>
+                              <div className="text-2xl font-bold text-red-400 mb-1">HIGH</div>
+                              <div className="text-slate-400 text-xs">Core market overlap. 18% vs 45% — challenger is hungry.</div>
+                            </div>
+                            <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                              <div className="text-amber-400 font-bold text-xs mb-1">C — CAPABILITY</div>
+                              <div className="text-2xl font-bold text-amber-400 mb-1">BUILDING</div>
+                              <div className="text-slate-400 text-xs">45 new sales hires. Patent filings. Growing fast.</div>
+                            </div>
+                          </div>
+                          <div className="mt-3 bg-slate-700 rounded-lg p-3">
+                            <div className="text-white text-xs font-semibold">Response Probability: <span className="text-red-400">70-90%</span></div>
+                            <div className="text-slate-400 text-xs mt-1">All three AMC conditions met → HIGH response probability. DataStorm WILL act aggressively.</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Exchange Value Reference */}
+                      {round.framework === 'EXCHANGE' && (
+                        <div className="bg-slate-800 rounded-xl p-4">
+                          <h4 className="text-white font-bold text-sm mb-3">Exchange Value Quick Calculator</h4>
+                          <div className="text-slate-400 text-xs mb-2">EV = Reference Value + Differential Value</div>
+                          <div className="space-y-2">
+                            <div className="bg-slate-700 rounded-lg p-3">
+                              <div className="text-slate-300 text-xs font-semibold">Reference Value (Do Nothing):</div>
+                              <div className="text-white text-sm">Current trajectory: ~2% share loss per quarter = -€104M/year</div>
+                            </div>
+                            <div className="bg-slate-700 rounded-lg p-3">
+                              <div className="text-slate-300 text-xs font-semibold">Key question:</div>
+                              <div className="text-amber-300 text-sm">Does your chosen strategy's Differential Value exceed the cost of inaction?</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Scenario Matrix Reference */}
+                      {round.framework === 'SCENARIO' && (
+                        <div className="bg-slate-800 rounded-xl p-4">
+                          <h4 className="text-white font-bold text-sm mb-3">2x2 Scenario Matrix — Post-Game Planning</h4>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-green-500/10 rounded-lg p-3 border border-green-500/20">
+                              <div className="text-green-400 text-xs font-bold">DataStorm sustains pricing + Customers value price</div>
+                              <div className="text-slate-300 text-xs mt-1">Price war continues. Margin compression for all.</div>
+                            </div>
+                            <div className="bg-blue-500/10 rounded-lg p-3 border border-blue-500/20">
+                              <div className="text-blue-400 text-xs font-bold">DataStorm sustains + Customers value security</div>
+                              <div className="text-slate-300 text-xs mt-1">Market segments. Both can win in different niches.</div>
+                            </div>
+                            <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                              <div className="text-amber-400 text-xs font-bold">DataStorm retreats + Customers value price</div>
+                              <div className="text-slate-300 text-xs mt-1">Opportunity for moderate pricing adjustment.</div>
+                            </div>
+                            <div className="bg-purple-500/10 rounded-lg p-3 border border-purple-500/20">
+                              <div className="text-purple-400 text-xs font-bold">DataStorm retreats + Customers value security</div>
+                              <div className="text-slate-300 text-xs mt-1">Best case for CloudVault. Premium holds.</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Strategy framework tags */}
+                      {myDecision && (
+                        <div className="bg-emerald-900/20 rounded-xl p-4 border border-emerald-500/30">
+                          <h4 className="text-emerald-300 font-bold text-sm mb-2">Framework Analysis of Your Selection: {myDecision.name}</h4>
+                          <p className="text-slate-300 text-xs whitespace-pre-line">{myDecision.framework}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ANALYSIS TAB */}
+                  {(currentTeam === 'blue' || currentTeam === 'red') && activeTab === 'analysis' && (
+                    <div className="space-y-4">
+                      {/* Competitive Dyad */}
+                      <div className="bg-slate-800 rounded-xl p-4">
+                        <h4 className="text-white font-bold text-sm mb-3">Competitive Dyad: Market Commonality × Resource Similarity</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-red-500/10 rounded-lg p-3 border border-red-500/20">
+                            <div className="text-red-400 text-xs font-bold mb-1">Market Commonality</div>
+                            <div className="text-2xl font-bold text-white">HIGH</div>
+                            <div className="text-slate-400 text-xs mt-1">Both compete in enterprise cloud storage. Same customers, same buyers.</div>
+                          </div>
+                          <div className="bg-amber-500/10 rounded-lg p-3 border border-amber-500/20">
+                            <div className="text-amber-400 text-xs font-bold mb-1">Resource Similarity</div>
+                            <div className="text-2xl font-bold text-white">MODERATE</div>
+                            <div className="text-slate-400 text-xs mt-1">CloudVault: security expertise + enterprise relationships. DataStorm: agility + aggressive sales culture.</div>
+                          </div>
+                        </div>
+                        <div className="mt-3 bg-slate-700 rounded-lg p-2 text-xs text-slate-300">
+                          Diagnosis: <strong>Intense Direct Rivalry</strong> with asymmetric capabilities. Response probability: 80-95%. Monitor daily.
+                        </div>
+                      </div>
+
+                      {/* Repertoire Radar */}
+                      <div className="bg-slate-800 rounded-xl p-4">
+                        <h4 className="text-white font-bold text-sm mb-3">Competitive Repertoire Comparison</h4>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <div className="text-blue-400 text-xs font-bold mb-2">CloudVault Profile</div>
+                            {[{l:'Volume',v:3},{l:'Complexity',v:4},{l:'Speed',v:2},{l:'Unpredictability',v:2}].map(d => (
+                              <div key={d.l} className="mb-2">
+                                <div className="flex justify-between text-xs text-slate-400 mb-0.5"><span>{d.l}</span><span>{d.v}/5</span></div>
+                                <div className="h-1.5 bg-slate-700 rounded-full"><div className="h-full bg-blue-500 rounded-full" style={{width:`${d.v*20}%`}}></div></div>
+                              </div>
+                            ))}
+                            <div className="text-xs text-slate-500 mt-1 italic">Pattern: Defensive, methodical, premium-focused</div>
+                          </div>
+                          <div>
+                            <div className="text-red-400 text-xs font-bold mb-2">DataStorm Profile</div>
+                            {[{l:'Volume',v:5},{l:'Complexity',v:3},{l:'Speed',v:5},{l:'Unpredictability',v:4}].map(d => (
+                              <div key={d.l} className="mb-2">
+                                <div className="flex justify-between text-xs text-slate-400 mb-0.5"><span>{d.l}</span><span>{d.v}/5</span></div>
+                                <div className="h-1.5 bg-slate-700 rounded-full"><div className="h-full bg-red-500 rounded-full" style={{width:`${d.v*20}%`}}></div></div>
+                              </div>
+                            ))}
+                            <div className="text-xs text-slate-500 mt-1 italic">Pattern: Aggressive, fast-moving, price-focused</div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Round History */}
+                      {(gameState.roundResults || []).length > 0 && (
+                        <div className="bg-slate-800 rounded-xl p-4">
+                          <h4 className="text-white font-bold text-sm mb-3">Round History</h4>
+                          {(gameState.roundResults || []).map(r => (
+                            <div key={r.round} className="mb-3 bg-slate-700 rounded-lg p-3">
+                              <div className="flex justify-between text-xs mb-1"><span className="text-white font-bold">Round {r.round}</span>
+                                {r.interaction && <span className="text-indigo-300">Blue: {r.interaction.blueScore} | Red: {r.interaction.redScore}</span>}
+                              </div>
+                              <div className="text-xs text-blue-300">CloudVault: {r.blueDecision}</div>
+                              <div className="text-xs text-red-300">DataStorm: {r.redDecision}</div>
+                              {r.interaction && <div className="text-xs text-slate-400 mt-1 italic">{r.interaction.analysis.substring(0, 120)}...</div>}
+                              {r.shocks.length > 0 && <div className="text-xs text-amber-300 mt-1">Shocks: {r.shocks.join(', ')}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -766,98 +810,163 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
         );
       };
 
-      // Debrief Screen
-      const DebriefScreen = () => (
-        <div className="min-h-screen p-6 bg-slate-900">
-          <div className="max-w-3xl mx-auto">
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-white mb-2">🏁 Game Complete</h1>
-              <span className="bg-slate-700 px-3 py-1 rounded-lg text-slate-300 font-mono">{roomCode}</span>
-            </div>
+      // ==================== DEBRIEF SCREEN ====================
+      const DebriefScreen = () => {
+        const results = gameState.roundResults || [];
+        const blueStart = CASE_STUDY.marketData.cloudVaultShare;
+        const redStart = CASE_STUDY.marketData.dataStormShare;
+        const blueEnd = gameState.marketState.cloudVaultShare;
+        const redEnd = gameState.marketState.dataStormShare;
+        const blueChange = blueEnd - blueStart;
+        const redChange = redEnd - redStart;
 
-            <div className="bg-slate-800 rounded-xl p-6 mb-6">
-              <h2 className="text-xl font-bold text-white mb-4 text-center">Final Results</h2>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl text-center bg-blue-500/20">
-                  <div className="text-3xl mb-1">🛡️</div>
-                  <div className="text-white font-bold">CloudVault</div>
-                  <div className="text-3xl font-bold text-blue-400">{gameState.marketState.cloudVaultShare}%</div>
-                  <div className="text-xs text-slate-400">Started: 45%</div>
+        return (
+          <div className="min-h-screen p-6 bg-slate-900">
+            <div className="max-w-4xl mx-auto">
+              <div className="text-center mb-8">
+                <h1 className="text-3xl font-bold text-white mb-2">Game Complete — Strategic Debrief</h1>
+                <span className="bg-slate-700 px-3 py-1 rounded-lg text-slate-300 font-mono">{roomCode}</span>
+              </div>
+
+              {/* Final Score */}
+              <div className="bg-slate-800 rounded-xl p-6 mb-6">
+                <h2 className="text-xl font-bold text-white mb-4 text-center">Final Market Position</h2>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div className="p-4 rounded-xl text-center bg-blue-500/20">
+                    <div className="text-white font-bold">CloudVault</div>
+                    <div className="text-4xl font-bold text-blue-400">{blueEnd}%</div>
+                    <div className={`text-sm font-semibold ${blueChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>{blueChange >= 0 ? '+' : ''}{blueChange}% from start</div>
+                    <div className="text-xs text-slate-400 mt-1">Revenue: ~€{(blueEnd / 100 * 5.2).toFixed(1)}B</div>
+                  </div>
+                  <div className="p-4 rounded-xl text-center bg-red-500/20">
+                    <div className="text-white font-bold">DataStorm</div>
+                    <div className="text-4xl font-bold text-red-400">{redEnd}%</div>
+                    <div className={`text-sm font-semibold ${redChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>{redChange >= 0 ? '+' : ''}{redChange}% from start</div>
+                    <div className="text-xs text-slate-400 mt-1">Revenue: ~€{(redEnd / 100 * 5.2).toFixed(1)}B</div>
+                  </div>
                 </div>
-                <div className="p-4 rounded-xl text-center bg-red-500/20">
-                  <div className="text-3xl mb-1">⚔️</div>
-                  <div className="text-white font-bold">DataStorm</div>
-                  <div className="text-3xl font-bold text-red-400">{gameState.marketState.dataStormShare}%</div>
-                  <div className="text-xs text-slate-400">Started: 18%</div>
+
+                {/* Share Progression */}
+                <div className="bg-slate-900 rounded-lg p-4">
+                  <h3 className="text-white text-sm font-bold mb-2">Market Share Progression</h3>
+                  <div className="flex items-end gap-1 h-24">
+                    {[{r:0,b:blueStart,d:redStart}, ...results.map(r => ({r:r.round,b:r.finalShares.cloudVaultShare,d:r.finalShares.dataStormShare}))].map((p,i) => (
+                      <div key={i} className="flex-1 flex gap-0.5">
+                        <div className="flex-1 flex flex-col justify-end">
+                          <div className="bg-blue-500 rounded-t" style={{height:`${p.b * 1.5}px`}}></div>
+                          <div className="text-center text-xs text-blue-400 mt-1">{p.b}%</div>
+                        </div>
+                        <div className="flex-1 flex flex-col justify-end">
+                          <div className="bg-red-500 rounded-t" style={{height:`${p.d * 1.5}px`}}></div>
+                          <div className="text-center text-xs text-red-400 mt-1">{p.d}%</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-1 mt-1">
+                    <div className="flex-1 text-center text-xs text-slate-500">Start</div>
+                    {results.map(r => <div key={r.round} className="flex-1 text-center text-xs text-slate-500">R{r.round}</div>)}
+                  </div>
                 </div>
               </div>
 
-              {(gameState.roundResults || []).length > 0 && (
-                <div className="mt-4 bg-slate-900 rounded-lg p-3">
-                  <table className="w-full text-sm">
-                    <thead><tr className="text-slate-400 border-b border-slate-700"><th className="text-left p-2">Round</th><th className="text-left p-2">CloudVault</th><th className="text-left p-2">DataStorm</th></tr></thead>
-                    <tbody>
-                      {(gameState.roundResults || []).map(r => (
-                        <tr key={r.round} className="text-slate-300 border-b border-slate-700/50">
-                          <td className="p-2">R{r.round}</td>
-                          <td className="p-2">{r.blueDecision}</td>
-                          <td className="p-2">{r.redDecision}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              {/* Round-by-Round Analysis */}
+              <div className="bg-slate-800 rounded-xl p-6 mb-6">
+                <h2 className="text-lg font-bold text-white mb-4">Round-by-Round Strategic Analysis</h2>
+                {results.map(r => (
+                  <div key={r.round} className="mb-6 last:mb-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="bg-indigo-500/20 text-indigo-300 text-xs px-2 py-1 rounded font-bold">Round {r.round}: {CASE_STUDY.rounds[r.round-1].name}</span>
+                      {r.interaction && <span className="text-xs text-slate-400">Blue: <span className={r.interaction.blueScore.startsWith('A') ? 'text-green-400' : r.interaction.blueScore.startsWith('B') ? 'text-blue-400' : r.interaction.blueScore.startsWith('D') || r.interaction.blueScore.startsWith('F') ? 'text-red-400' : 'text-amber-400'}>{r.interaction.blueScore}</span> | Red: <span className={r.interaction.redScore.startsWith('A') ? 'text-green-400' : r.interaction.redScore.startsWith('B') ? 'text-blue-400' : r.interaction.redScore.startsWith('D') || r.interaction.redScore.startsWith('F') ? 'text-red-400' : 'text-amber-400'}>{r.interaction.redScore}</span></span>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mb-2">
+                      <div className="bg-blue-500/10 rounded-lg p-3 border border-blue-500/20">
+                        <div className="text-blue-400 text-xs font-bold">CloudVault played:</div>
+                        <div className="text-white text-sm font-semibold">{r.blueDecision}</div>
+                      </div>
+                      <div className="bg-red-500/10 rounded-lg p-3 border border-red-500/20">
+                        <div className="text-red-400 text-xs font-bold">DataStorm played:</div>
+                        <div className="text-white text-sm font-semibold">{r.redDecision}</div>
+                      </div>
+                    </div>
+                    {r.interaction && (
+                      <div className="bg-slate-700 rounded-lg p-3">
+                        <div className="text-slate-200 text-xs whitespace-pre-line">{r.interaction.analysis}</div>
+                      </div>
+                    )}
+                    {r.shocks.length > 0 && <div className="mt-2 text-xs text-amber-300">Shocks this round: {r.shocks.join(', ')}</div>}
+                  </div>
+                ))}
+              </div>
+
+              {/* Framework Debrief */}
+              <div className="bg-indigo-900/20 rounded-xl p-6 mb-6 border border-indigo-500/30">
+                <h2 className="text-lg font-bold text-indigo-300 mb-4">CI Framework Application Review</h2>
+                <div className="space-y-4">
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-white text-sm font-bold mb-2">AMC Framework (Chen & Miller, 2012)</h3>
+                    <p className="text-slate-300 text-xs">Did you correctly assess competitor Awareness, Motivation, and Capability before each move? Review: Were there rounds where you underestimated the opponent's capability or motivation?</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-white text-sm font-bold mb-2">Competitive Repertoire Analysis (Miller & Chen, 1996)</h3>
+                    <p className="text-slate-300 text-xs">Did you predict HOW your opponent would respond based on their historical patterns? CloudVault's defensive pattern vs DataStorm's aggressive pattern — did these hold or surprise you?</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-white text-sm font-bold mb-2">Exchange Value Methodology (Nagle, Hogan & Zale, 2016)</h3>
+                    <p className="text-slate-300 text-xs">Did you calculate the reference value (baseline scenario) before choosing each strategy? Or did you react emotionally? Review each round: was your chosen move's differential value positive vs. doing nothing?</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-white text-sm font-bold mb-2">Assumption-Based Planning (Dewar, 2002)</h3>
+                    <p className="text-slate-300 text-xs">Identify the load-bearing assumptions behind your strategy. Which assumptions held? Which broke? If shock events disrupted your plan, did you have hedging actions ready?</p>
+                  </div>
+                  <div className="bg-slate-800/50 rounded-lg p-4">
+                    <h3 className="text-white text-sm font-bold mb-2">Scenario Planning — Shell Method (Wack, 1985)</h3>
+                    <p className="text-slate-300 text-xs">Looking forward: What are the 2 critical uncertainties for the next quarter? Build a 2×2 scenario matrix and identify signposts to monitor. What shaping and hedging actions should you take now?</p>
+                  </div>
                 </div>
-              )}
-            </div>
+              </div>
 
-            <div className="bg-amber-900/30 rounded-xl p-5 mb-6 border border-amber-500/30">
-              <h3 className="text-amber-400 font-bold mb-3">💡 Debrief Questions</h3>
-              <ul className="text-slate-300 text-sm space-y-2">
-                <li>• What surprised you about your opponent's moves?</li>
-                <li>• What assumptions proved wrong?</li>
-                <li>• What would you do differently?</li>
-                <li>• What real companies face similar dynamics?</li>
-              </ul>
-            </div>
+              {/* Debrief Questions */}
+              <div className="bg-amber-900/30 rounded-xl p-5 mb-6 border border-amber-500/30">
+                <h3 className="text-amber-400 font-bold mb-3">Discussion Questions</h3>
+                <ul className="text-slate-300 text-sm space-y-2">
+                  <li>1. What load-bearing assumptions did you hold that proved wrong? (ABP)</li>
+                  <li>2. Did you correctly predict your opponent's response type using AMC? Where did the prediction fail?</li>
+                  <li>3. Which moves created the highest Exchange Value? Which destroyed value?</li>
+                  <li>4. How did exogenous shocks affect your strategy? Were you prepared? (Scenario Planning robustness)</li>
+                  <li>5. If you replayed, what signposts would you monitor differently?</li>
+                  <li>6. What real companies face similar competitive dynamics? (e.g., AWS vs Azure, Uber vs Lyft)</li>
+                </ul>
+              </div>
 
-            <div className="text-center">
-              <button onClick={resetGame} className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-bold">
-                🔄 Play Again
-              </button>
+              <div className="text-center">
+                <button onClick={resetGame} className="bg-gradient-to-r from-blue-600 to-purple-600 text-white px-6 py-3 rounded-xl font-bold">Play Again</button>
+              </div>
             </div>
           </div>
-        </div>
-      );
+        );
+      };
 
-      // Connection Status
       const StatusIndicator = () => (
         <div className="fixed bottom-3 right-3 flex items-center gap-2 bg-slate-800 px-3 py-2 rounded-full text-xs z-50">
           <div className={`sync-indicator ${connectionStatus === 'connected' ? 'bg-green-500' : connectionStatus === 'local' ? 'bg-amber-500' : 'bg-red-500'}`}></div>
-          <span className="text-slate-400">
-            {connectionStatus === 'connected' ? '☁️ Cloud Sync' : connectionStatus === 'local' ? '💻 Local Sync' : '⚫ Offline'}
-          </span>
+          <span className="text-slate-400">{connectionStatus === 'connected' ? 'Cloud Sync' : connectionStatus === 'local' ? 'Local Sync' : 'Offline'}</span>
         </div>
       );
 
-      // Notifications
       const Notifications = () => (
         <div className="fixed top-4 right-4 z-50 space-y-2">
           {notifications.map(n => (
-            <div key={n.id} className={`slide-in p-3 rounded-lg shadow-lg text-sm text-white ${
-              n.type === 'success' ? 'bg-green-600' : n.type === 'warning' ? 'bg-amber-600' : 'bg-blue-600'
-            }`}>{n.message}</div>
+            <div key={n.id} className={`slide-in p-3 rounded-lg shadow-lg text-sm text-white ${n.type === 'success' ? 'bg-green-600' : n.type === 'warning' ? 'bg-amber-600' : 'bg-blue-600'}`}>{n.message}</div>
           ))}
         </div>
       );
 
-      // Main Render
       const renderScreen = () => {
         if (!roomCode) return <SetupScreen />;
         if (!currentTeam) return <TeamSelectionScreen />;
-        // Once team is selected, show based on gamePhase
         if (gameState.gamePhase === 'playing') return <GameScreen />;
         if (gameState.gamePhase === 'debrief') return <DebriefScreen />;
-        // Default: show briefing (waiting for Control to start)
         return <BriefingScreen />;
       };
 
@@ -871,9 +980,7 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
     };
 
     ReactDOM.render(
-      <ErrorBoundary>
-        <WarGameSimulator />
-      </ErrorBoundary>,
+      <ErrorBoundary><WarGameSimulator /></ErrorBoundary>,
       document.getElementById('root')
     );
   </script>
