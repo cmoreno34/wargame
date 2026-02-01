@@ -236,10 +236,13 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
         const toSave = { ...state, lastUpdate: Date.now() };
         
         if (database && roomCode && dbRef.current) {
-          dbRef.current.set(toSave);
+          dbRef.current.set(toSave).catch(err => console.error('Firebase save error:', err));
         } else if (roomCode) {
           localStorage.setItem(`wargame_${roomCode}`, JSON.stringify(toSave));
         }
+        
+        // Also update local state
+        setGameState(toSave);
       };
 
       const updateState = (updates) => {
@@ -279,15 +282,20 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
 
       const selectTeam = (team) => {
         setCurrentTeam(team);
-        updateState({ gamePhase: 'briefing' });
+        // Don't change shared gamePhase here - just set local team
+        // Control team will advance the phase
       };
 
       const startGame = () => {
-        updateState({ 
+        const newState = { 
+          ...gameState,
           gamePhase: 'playing', 
           isTimerRunning: true, 
-          timeRemaining: GAME_CONFIG.roundDurationMinutes * 60 
-        });
+          timeRemaining: GAME_CONFIG.roundDurationMinutes * 60,
+          lastUpdate: Date.now()
+        };
+        setGameState(newState);
+        saveState(newState);
         addNotification('🚀 Game started!', 'success');
       };
 
@@ -781,11 +789,11 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
       const renderScreen = () => {
         if (!roomCode) return <SetupScreen />;
         if (!currentTeam) return <TeamSelectionScreen />;
-        if (gameState.gamePhase === 'setup') return <TeamSelectionScreen />;
-        if (gameState.gamePhase === 'briefing') return <BriefingScreen />;
+        // Once team is selected, show based on gamePhase
         if (gameState.gamePhase === 'playing') return <GameScreen />;
         if (gameState.gamePhase === 'debrief') return <DebriefScreen />;
-        return <TeamSelectionScreen />;
+        // Default: show briefing (waiting for Control to start)
+        return <BriefingScreen />;
       };
 
       return (
@@ -801,3 +809,4 @@ CloudVault's board has called an emergency session. Anticipate DataStorm's moves
   </script>
 </body>
 </html>
+
